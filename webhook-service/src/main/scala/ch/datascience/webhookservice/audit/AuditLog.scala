@@ -20,11 +20,14 @@ package ch.datascience.webhookservice.audit
 
 import java.util
 
+import cats.data.OptionT
 import cats.effect.IO
 import ch.datascience.graph.model.events.SerializedCommitEvent
+import ch.datascience.logging.ApplicationLogger
 import ch.epfl.dedis.byzcoin.SignerCounters
 import ch.epfl.dedis.eventlog.EventLogInstance
 import ch.epfl.dedis.lib.darc.Signer
+import io.chrisdavenport.log4cats.Logger
 
 import scala.language.higherKinds
 
@@ -32,12 +35,19 @@ trait AuditLog[Interpretation[_]] {
   def push(serializedEvent: SerializedCommitEvent): Interpretation[Unit]
 }
 
-class IOAuditLog private (eventLog: EventLogInstance, signers: util.List[Signer], signerCounters: SignerCounters)
+object AuditLogPassThrough extends AuditLog[IO] {
+  override def push(serializedEvent: SerializedCommitEvent): IO[Unit] = IO.unit
+}
+
+class IOAuditLog private (config:         AuditLogConfig,
+                          eventLog:       EventLogInstance,
+                          signers:        util.List[Signer],
+                          signerCounters: SignerCounters)
     extends AuditLog[IO] {
   override def push(serializedEvent: SerializedCommitEvent): IO[Unit] = IO {
     import ch.epfl.dedis.eventlog.Event
 
-    val event = new Event("renku", serializedEvent.value)
+    val event = new Event(config.topic.value, serializedEvent.value)
     val incrementedSignerCounters = {
       signerCounters.increment()
       signerCounters.getCounters
@@ -58,7 +68,16 @@ object IOAuditLog {
 
   import scala.collection.JavaConverters._
 
-  def apply(): IO[AuditLog[IO]] = IO {
+  def apply(maybeConfig: OptionT[IO, AuditLogConfig] = AuditLogConfig.get(),
+            logger:      Logger[IO]                  = ApplicationLogger): IO[AuditLog[IO]] =
+    maybeConfig
+      .semiflatMap(instantiateAuditLog)
+      .getOrElse {
+        logger.info("SecureKG auditing disabled")
+        AuditLogPassThrough
+      }
+
+  private def instantiateAuditLog(config: AuditLogConfig) = IO {
     val admin: Signer = new SignerEd25519
     val roster = {
       val identities = List.empty[ServerIdentity]
@@ -76,11 +95,11 @@ object IOAuditLog {
     val byzcoin        = new ByzCoinRPC(roster, genesisDarc, Duration.of(1000, MILLIS))
     val signerCounters = byzcoin.getSignerCounters(List(admin.getIdentity.toString).asJava)
     val signers        = List(admin).asJava
-    val eventLog: EventLogInstance = new EventLogInstance(byzcoin,
-                                                          genesisDarc.getId,
-                                                          signers,
-                                                          List(new java.lang.Long(signerCounters.head + 1)).asJava)
+    val eventLog = new EventLogInstance(byzcoin,
+                                        genesisDarc.getId,
+                                        signers,
+                                        List(new java.lang.Long(signerCounters.head + 1)).asJava)
 
-    new IOAuditLog(eventLog, signers, signerCounters)
+    new IOAuditLog(config, eventLog, signers, signerCounters)
   }
 }

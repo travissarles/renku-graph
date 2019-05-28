@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Swiss Data Science Center (SDSC)
+ * Copyright 2019 Swiss Data Science Center (SDSC)
  * A partnership between École Polytechnique Fédérale de Lausanne (EPFL) and
  * Eidgenössische Technische Hochschule Zürich (ETHZ).
  *
@@ -16,8 +16,25 @@
  * limitations under the License.
  */
 
-name := "webhook-service"
+package ch.datascience.webhookservice.audit
 
-libraryDependencies += "ch.epfl.dedis"  % "cothority"       % "3.1.0"
-libraryDependencies += "ch.qos.logback" % "logback-classic" % "1.2.3"
-libraryDependencies += "io.sentry"      % "sentry-logback"  % "1.7.22"
+import cats.data.OptionT
+import cats.effect.IO
+import ch.datascience.interpreters.TestLogger
+import ch.datascience.interpreters.TestLogger.Level.Info
+import org.scalatest.Matchers._
+import org.scalatest.WordSpec
+
+class IOAuditLogSpec extends WordSpec {
+
+  "apply" should {
+
+    "return NoAuditLog if Audit Log is disabled in the config" in {
+      val logger = TestLogger[IO]()
+
+      IOAuditLog(OptionT.none[IO, AuditLogConfig], logger).unsafeRunSync() shouldBe AuditLogPassThrough
+
+      logger.loggedOnly(Info("SecureKG auditing disabled"))
+    }
+  }
+}
