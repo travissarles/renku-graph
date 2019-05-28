@@ -21,9 +21,8 @@ package ch.datascience.triplesgenerator.eventprocessing
 import cats.MonadError
 import cats.data.NonEmptyList
 import cats.implicits._
-import ch.datascience.dbeventlog.EventBody
 import ch.datascience.generators.Generators.Implicits._
-import ch.datascience.graph.model.events.{CommitId, Project}
+import ch.datascience.graph.model.events.{CommitId, Project, SerializedCommitEvent}
 import ch.datascience.graph.model.events.EventsGenerators._
 import ch.datascience.triplesgenerator.eventprocessing.Commit.{CommitWithParent, CommitWithoutParent}
 import io.circe._
@@ -64,14 +63,15 @@ class CommitEventsDeserialiserSpec extends WordSpec {
     }
 
     "fail if parsing fails" in new TestCase {
-      val Failure(ParsingFailure(message, underlying)) = deserialiser.deserialiseToCommitEvents(EventBody("{"))
+      val Failure(ParsingFailure(message, underlying)) =
+        deserialiser.deserialiseToCommitEvents(SerializedCommitEvent("{"))
 
       message    shouldBe "CommitEvent cannot be deserialised: '{'"
       underlying shouldBe a[ParsingFailure]
     }
 
     "fail if decoding fails" in new TestCase {
-      val Failure(DecodingFailure(message, _)) = deserialiser.deserialiseToCommitEvents(EventBody("{}"))
+      val Failure(DecodingFailure(message, _)) = deserialiser.deserialiseToCommitEvents(SerializedCommitEvent("{}"))
 
       message shouldBe "CommitEvent cannot be deserialised: '{}'"
     }
@@ -86,7 +86,7 @@ class CommitEventsDeserialiserSpec extends WordSpec {
 
     val deserialiser = new CommitEventsDeserialiser[Try]
 
-    def commitEvent(parents: List[CommitId]): EventBody = EventBody {
+    def commitEvent(parents: List[CommitId]): SerializedCommitEvent = SerializedCommitEvent {
       Json
         .obj(
           "id"      -> Json.fromString(commitId.value),

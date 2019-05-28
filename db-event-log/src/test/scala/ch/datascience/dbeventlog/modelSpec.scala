@@ -56,22 +56,6 @@ class EventStatusSpec extends WordSpec with ScalaCheckPropertyChecks {
   }
 }
 
-class EventBodySpec extends WordSpec with ScalaCheckPropertyChecks {
-
-  "EventBody" should {
-
-    "have the NonBlank constraint" in {
-      EventBody shouldBe an[NonBlank]
-    }
-
-    "be instantiatable from any non-blank string" in {
-      forAll(nonEmptyStrings()) { body =>
-        EventBody.from(body).map(_.value) shouldBe Right(body)
-      }
-    }
-  }
-}
-
 class CreatedDateSpec extends WordSpec with ScalaCheckPropertyChecks {
 
   "CreatedDate" should {

@@ -25,7 +25,8 @@ import cats.implicits._
 import ch.datascience.db.DbTransactor
 import ch.datascience.dbeventlog.EventStatus._
 import ch.datascience.dbeventlog.commands._
-import ch.datascience.dbeventlog.{EventBody, EventLogDB, EventMessage}
+import ch.datascience.dbeventlog.{EventLogDB, EventMessage}
+import ch.datascience.graph.model.events.SerializedCommitEvent
 import ch.datascience.graph.tokenrepository.{AccessTokenFinder, IOAccessTokenFinder, TokenRepositoryUrlProvider}
 import ch.datascience.http.client.AccessToken
 import ch.datascience.logging.ExecutionTimeRecorder.ElapsedTime
@@ -63,14 +64,14 @@ class CommitEventProcessor[Interpretation[_]](
   import fusekiConnector._
   import triplesFinder._
 
-  def apply(eventBody: EventBody): Interpretation[Unit] =
+  def apply(serializedEvent: SerializedCommitEvent): Interpretation[Unit] =
     measureExecutionTime {
       for {
-        commits          <- deserialiseToCommitEvents(eventBody)
+        commits          <- deserialiseToCommitEvents(serializedEvent)
         maybeAccessToken <- findAccessToken(commits.head.project.id) recoverWith rollback(commits.head)
         uploadingResults <- allToTriplesAndUpload(commits, maybeAccessToken)
       } yield uploadingResults
-    } flatMap logSummary recoverWith logEventProcessingError(eventBody)
+    } flatMap logSummary recoverWith logEventProcessingError(serializedEvent)
 
   private def allToTriplesAndUpload(
       commits:          NonEmptyList[Commit],
@@ -84,11 +85,14 @@ class CommitEventProcessor[Interpretation[_]](
                                  maybeAccessToken: Option[AccessToken]): Interpretation[UploadingResult] = {
     for {
       triples <- generateTriples(commit, maybeAccessToken)
-      result <- upload(triples)
-                 .map(_ => Uploaded(commit, triples.value.size()): UploadingResult)
-                 .recoverWith(recoverableFailure(commit))
+      result  <- uploadToRDFStore(triples, commit)
     } yield result
   } recoverWith nonRecoverableFailure(commit)
+
+  private def uploadToRDFStore(triples: RDFTriples, commit: Commit) =
+    upload(triples)
+      .map(_ => Uploaded(commit, triples.value.size()): UploadingResult)
+      .recoverWith(recoverableFailure(commit))
 
   private def recoverableFailure(commit: Commit): PartialFunction[Throwable, Interpretation[UploadingResult]] = {
     case NonFatal(exception) =>
@@ -167,8 +171,9 @@ class CommitEventProcessor[Interpretation[_]](
       s"Commit Event id: $id, project: ${project.id} ${project.path}, parentId: $parentId"
   }
 
-  private def logEventProcessingError(eventBody: EventBody): PartialFunction[Throwable, Interpretation[Unit]] = {
-    case NonFatal(exception) => logger.error(exception)(s"Commit Event processing failure: $eventBody")
+  private def logEventProcessingError(
+      serializedEvent: SerializedCommitEvent): PartialFunction[Throwable, Interpretation[Unit]] = {
+    case NonFatal(exception) => logger.error(exception)(s"Commit Event processing failure: $serializedEvent")
   }
 
   private def rollback(commit: Commit): PartialFunction[Throwable, Interpretation[Option[AccessToken]]] = {

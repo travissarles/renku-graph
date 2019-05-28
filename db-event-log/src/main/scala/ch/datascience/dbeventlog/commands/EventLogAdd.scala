@@ -23,8 +23,8 @@ import java.time.Instant
 import cats.effect.{Bracket, ContextShift, IO}
 import cats.free.Free
 import ch.datascience.db.DbTransactor
-import ch.datascience.dbeventlog.{EventBody, EventLogDB, EventStatus}
-import ch.datascience.graph.model.events._
+import ch.datascience.dbeventlog.{EventLogDB, EventStatus}
+import ch.datascience.graph.model.events.{SerializedCommitEvent, _}
 import doobie.free.connection.ConnectionOp
 import doobie.implicits._
 
@@ -35,13 +35,13 @@ class EventLogAdd[Interpretation[_]](
     now:        () => Instant = () => Instant.now
 )(implicit ME:  Bracket[Interpretation, Throwable]) {
 
-  def storeNewEvent(commitEvent: CommitEvent, eventBody: EventBody): Interpretation[Unit] =
-    insertIfNotDuplicate(commitEvent, eventBody).transact(transactor.get)
+  def storeNewEvent(commitEvent: CommitEvent, serializedEvent: SerializedCommitEvent): Interpretation[Unit] =
+    insertIfNotDuplicate(commitEvent, serializedEvent).transact(transactor.get)
 
-  private def insertIfNotDuplicate(commitEvent: CommitEvent, eventBody: EventBody) =
+  private def insertIfNotDuplicate(commitEvent: CommitEvent, serializedEvent: SerializedCommitEvent) =
     for {
       maybeEventId <- checkIfExists(commitEvent)
-      _            <- if (maybeEventId.isEmpty) insert(commitEvent, eventBody) else Free.pure[ConnectionOp, Unit](())
+      _            <- if (maybeEventId.isEmpty) insert(commitEvent, serializedEvent) else Free.pure[ConnectionOp, Unit](())
     } yield ()
 
   private def checkIfExists(commitEvent: CommitEvent) =
@@ -52,12 +52,12 @@ class EventLogAdd[Interpretation[_]](
       .query[String]
       .option
 
-  private def insert(commitEvent: CommitEvent, eventBody: EventBody) = {
+  private def insert(commitEvent: CommitEvent, serializedEvent: SerializedCommitEvent) = {
     import commitEvent._
     val currentTime = now()
     sql"""insert into 
           event_log (event_id, project_id, status, created_date, execution_date, event_date, event_body) 
-          values ($id, ${project.id}, ${EventStatus.New: EventStatus}, $currentTime, $currentTime, $committedDate, $eventBody)
+          values ($id, ${project.id}, ${EventStatus.New: EventStatus}, $currentTime, $currentTime, $committedDate, $serializedEvent)
       """.update.run.map(_ => ())
   }
 }

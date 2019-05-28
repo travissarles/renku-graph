@@ -22,10 +22,11 @@ import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
 
 import cats.effect._
 import ch.datascience.db.DbTransactor
-import ch.datascience.dbeventlog.DbEventLogGenerators._
+import ch.datascience.dbeventlog.EventLogDB
 import ch.datascience.dbeventlog.commands.IOEventLogFetch
-import ch.datascience.dbeventlog.{EventBody, EventLogDB}
 import ch.datascience.generators.Generators.Implicits._
+import ch.datascience.graph.model.events.EventsGenerators._
+import ch.datascience.graph.model.events.SerializedCommitEvent
 import ch.datascience.interpreters.TestLogger
 import ch.datascience.interpreters.TestLogger.Level.Info
 import com.typesafe.config.ConfigFactory
@@ -46,12 +47,12 @@ class DbEventProcessorRunnerSpec extends WordSpec with Eventually with Integrati
   "event source" should {
 
     "send every new event fetched from db to the registered processor and process them concurrently" in new TestCase {
-      val events = listOfN(1000, eventBodies).generateOne
+      val events = listOfN(1000, serializedCommitEvents).generateOne
 
       eventLogFetch.addEventsToReturn(events)
 
-      val accumulator = new ConcurrentHashMap[EventBody, Long]()
-      def processor(event: EventBody): IO[Unit] = {
+      val accumulator = new ConcurrentHashMap[SerializedCommitEvent, Long]()
+      def processor(event: SerializedCommitEvent): IO[Unit] = {
         accumulator.put(event, Thread.currentThread().getId)
         IO.unit
       }
@@ -62,7 +63,7 @@ class DbEventProcessorRunnerSpec extends WordSpec with Eventually with Integrati
         accumulator.keySet().asScala shouldBe events.toSet
       }
 
-      val subsequentEvent = eventBodies.generateOne
+      val subsequentEvent = serializedCommitEvents.generateOne
       eventLogFetch.addEventsToReturn(Seq(subsequentEvent))
 
       eventually {
@@ -73,16 +74,16 @@ class DbEventProcessorRunnerSpec extends WordSpec with Eventually with Integrati
     }
 
     "continue if there is an error during processing" in new TestCase {
-      val eventBody1 = eventBodies.generateOne
-      val eventBody2 = eventBodies.generateOne
-      val eventBody3 = eventBodies.generateOne
+      val serializedEvent1 = serializedCommitEvents.generateOne
+      val serializedEvent2 = serializedCommitEvents.generateOne
+      val serializedEvent3 = serializedCommitEvents.generateOne
 
-      eventLogFetch.addEventsToReturn(Seq(eventBody1, eventBody2, eventBody3))
+      eventLogFetch.addEventsToReturn(Seq(serializedEvent1, serializedEvent2, serializedEvent3))
 
-      val accumulator = new ConcurrentHashMap[EventBody, Long]()
-      def processor(event: EventBody): IO[Unit] =
-        if (event == eventBody2)
-          IO.raiseError(new Exception("error during processing eventBody2"))
+      val accumulator = new ConcurrentHashMap[SerializedCommitEvent, Long]()
+      def processor(event: SerializedCommitEvent): IO[Unit] =
+        if (event == serializedEvent2)
+          IO.raiseError(new Exception("error during processing serializedEvent2"))
         else {
           accumulator.put(event, Thread.currentThread().getId)
           IO.unit
@@ -91,14 +92,14 @@ class DbEventProcessorRunnerSpec extends WordSpec with Eventually with Integrati
       eventSourceWith(processor).run.unsafeRunAsyncAndForget()
 
       eventually {
-        accumulator.keySet().asScala shouldBe Set(eventBody1, eventBody3)
+        accumulator.keySet().asScala shouldBe Set(serializedEvent1, serializedEvent3)
       }
 
-      val eventBody4 = eventBodies.generateOne
-      eventLogFetch.addEventsToReturn(Seq(eventBody4))
+      val serializedEvent4 = serializedCommitEvents.generateOne
+      eventLogFetch.addEventsToReturn(Seq(serializedEvent4))
 
       eventually {
-        accumulator.keySet().asScala shouldBe Set(eventBody1, eventBody3, eventBody4)
+        accumulator.keySet().asScala shouldBe Set(serializedEvent1, serializedEvent3, serializedEvent4)
       }
 
       logger.loggedOnly(Info("Waiting for new events"))
@@ -112,12 +113,12 @@ class DbEventProcessorRunnerSpec extends WordSpec with Eventually with Integrati
     class TestDbTransactor(transactor: Transactor.Aux[IO, _]) extends DbTransactor[IO, EventLogDB](transactor)
     private val transactor = mock[TestDbTransactor]
     val eventLogFetch = new IOEventLogFetch(transactor) {
-      private val eventsQueue = new ConcurrentLinkedQueue[EventBody]()
+      private val eventsQueue = new ConcurrentLinkedQueue[SerializedCommitEvent]()
 
-      def addEventsToReturn(events: Seq[EventBody]): Unit =
+      def addEventsToReturn(events: Seq[SerializedCommitEvent]): Unit =
         eventsQueue addAll events.asJava
 
-      override def popEventToProcess: IO[Option[EventBody]] = IO.pure {
+      override def popEventToProcess: IO[Option[SerializedCommitEvent]] = IO.pure {
         Option(eventsQueue.poll())
       }
 

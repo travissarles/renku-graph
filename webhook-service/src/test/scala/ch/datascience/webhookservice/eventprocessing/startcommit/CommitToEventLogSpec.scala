@@ -45,7 +45,7 @@ class CommitToEventLogSpec extends WordSpec with MockFactory {
 
   "storeCommitsInEventLog" should {
 
-    "convert the start Commit into commit events and store them in the event log" in new TestCase {
+    "convert the Start Commit into Commit Events and store them in both the Event Log" in new TestCase {
 
       val maybeAccessToken = Gen.option(accessTokens).generateOne
       (accessTokenFinder
@@ -82,7 +82,7 @@ class CommitToEventLogSpec extends WordSpec with MockFactory {
       )
     }
 
-    "fail if finding access token fails" in new TestCase {
+    "fail if finding the Access Token fails" in new TestCase {
 
       val exception = exceptions.generateOne
       (accessTokenFinder
@@ -95,7 +95,7 @@ class CommitToEventLogSpec extends WordSpec with MockFactory {
       logger.loggedOnly(Error(generalFailure(startCommit), exception))
     }
 
-    "fail if finding commit events source fails" in new TestCase {
+    "fail if finding Commit Events Source fails" in new TestCase {
 
       val maybeAccessToken = Gen.option(accessTokens).generateOne
       (accessTokenFinder
@@ -114,7 +114,7 @@ class CommitToEventLogSpec extends WordSpec with MockFactory {
       logger.loggedOnly(Error(generalFailure(startCommit), exception))
     }
 
-    "fail if finding commit events fails" in new TestCase {
+    "fail if finding Commit Events fails" in new TestCase {
 
       val maybeAccessToken = Gen.option(accessTokens).generateOne
       (accessTokenFinder
@@ -138,7 +138,7 @@ class CommitToEventLogSpec extends WordSpec with MockFactory {
       logger.loggedOnly(Error(failedFinding(startCommit), exception))
     }
 
-    "fail if transforming to commit events fails" in new TestCase {
+    "fail if transforming to Commit Events fails" in new TestCase {
 
       val maybeAccessToken = Gen.option(accessTokens).generateOne
       (accessTokenFinder
@@ -164,7 +164,7 @@ class CommitToEventLogSpec extends WordSpec with MockFactory {
       logger.loggedOnly(Error(failedFinding(startCommit), exception))
     }
 
-    "store all non failing events and log errors for these for which storing fails" in new TestCase {
+    "store all non failing Events and log errors for these for which storing fails" in new TestCase {
       val maybeAccessToken = Gen.option(accessTokens).generateOne
       (accessTokenFinder
         .findAccessToken(_: ProjectId))

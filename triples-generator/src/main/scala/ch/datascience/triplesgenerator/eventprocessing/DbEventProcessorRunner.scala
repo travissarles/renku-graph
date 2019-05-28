@@ -65,8 +65,8 @@ class DbEventProcessorRunner private (
     for {
       _ <- semaphore.acquire
       _ <- popEventToProcess flatMap {
-            case Some(eventBody) => eventProcessor(eventBody) recoverWith { case _ => IO.unit }
-            case None            => IO.unit
+            case Some(serializedEvent) => eventProcessor(serializedEvent) recoverWith { case _ => IO.unit }
+            case None                  => IO.unit
           }
       _ <- semaphore.release
     } yield ()

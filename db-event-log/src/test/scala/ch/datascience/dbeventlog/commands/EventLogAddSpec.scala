@@ -38,7 +38,7 @@ class EventLogAddSpec extends WordSpec with InMemoryEventLogDbSpec with MockFact
     "add a new event if there is no event with the given id for the given project" in new TestCase {
 
       // Save 1
-      eventLogAdd.storeNewEvent(commitEvent, eventBody).unsafeRunSync shouldBe ((): Unit)
+      eventLogAdd.storeNewEvent(commitEvent, serializedEvent).unsafeRunSync shouldBe ((): Unit)
 
       storedEvent(commitEvent.commitEventId) shouldBe (
         commitEvent.commitEventId,
@@ -46,13 +46,13 @@ class EventLogAddSpec extends WordSpec with InMemoryEventLogDbSpec with MockFact
         CreatedDate(now),
         ExecutionDate(now),
         commitEvent.committedDate,
-        eventBody,
+        serializedEvent,
         None
       )
 
       // Save 2 - different event id and different project
       val commitEvent2 = commitEvents.generateOne
-      val event2Body   = eventBodies.generateOne
+      val event2Body   = serializedCommitEvents.generateOne
       val nowForEvent2 = Instant.now()
       currentTime.expects().returning(nowForEvent2)
       eventLogAdd.storeNewEvent(commitEvent2, event2Body).unsafeRunSync shouldBe ((): Unit)
@@ -65,14 +65,14 @@ class EventLogAddSpec extends WordSpec with InMemoryEventLogDbSpec with MockFact
     "add a new event if there is another event with the same id but for a different project" in new TestCase {
 
       // Save 1
-      eventLogAdd.storeNewEvent(commitEvent, eventBody).unsafeRunSync shouldBe ((): Unit)
+      eventLogAdd.storeNewEvent(commitEvent, serializedEvent).unsafeRunSync shouldBe ((): Unit)
 
       val save1Event1 +: Nil = findEvents(status = New)
       save1Event1 shouldBe (commitEvent.commitEventId, ExecutionDate(now))
 
       // Save 2 - the same event id but different project
       val commitEvent2 = commitEvents.generateOne.copy(id = commitEvent.id)
-      val event2Body   = eventBodies.generateOne
+      val event2Body   = serializedCommitEvents.generateOne
       val nowForEvent2 = Instant.now()
       currentTime.expects().returning(nowForEvent2)
       eventLogAdd.storeNewEvent(commitEvent2, event2Body).unsafeRunSync shouldBe ((): Unit)
@@ -84,11 +84,11 @@ class EventLogAddSpec extends WordSpec with InMemoryEventLogDbSpec with MockFact
 
     "do nothing if there is an event with the same id and project in the db already" in new TestCase {
 
-      eventLogAdd.storeNewEvent(commitEvent, eventBody).unsafeRunSync shouldBe ((): Unit)
+      eventLogAdd.storeNewEvent(commitEvent, serializedEvent).unsafeRunSync shouldBe ((): Unit)
 
       storedEvent(commitEvent.commitEventId)._1 shouldBe commitEvent.commitEventId
 
-      val otherBody = eventBodies.generateOne
+      val otherBody = serializedCommitEvents.generateOne
       eventLogAdd.storeNewEvent(commitEvent, otherBody).unsafeRunSync shouldBe ((): Unit)
 
       storedEvent(commitEvent.commitEventId) shouldBe (
@@ -97,7 +97,7 @@ class EventLogAddSpec extends WordSpec with InMemoryEventLogDbSpec with MockFact
         CreatedDate(now),
         ExecutionDate(now),
         commitEvent.committedDate,
-        eventBody,
+        serializedEvent,
         None
       )
     }
@@ -105,8 +105,8 @@ class EventLogAddSpec extends WordSpec with InMemoryEventLogDbSpec with MockFact
 
   private trait TestCase {
 
-    val commitEvent = commitEvents.generateOne
-    val eventBody   = eventBodies.generateOne
+    val commitEvent     = commitEvents.generateOne
+    val serializedEvent = serializedCommitEvents.generateOne
 
     val currentTime = mockFunction[Instant]
     val eventLogAdd = new EventLogAdd(transactor, currentTime)
@@ -116,7 +116,13 @@ class EventLogAddSpec extends WordSpec with InMemoryEventLogDbSpec with MockFact
 
     def storedEvent(
         commitEventId: CommitEventId
-    ): (CommitEventId, EventStatus, CreatedDate, ExecutionDate, CommittedDate, EventBody, Option[EventMessage]) =
+    ): (CommitEventId,
+        EventStatus,
+        CreatedDate,
+        ExecutionDate,
+        CommittedDate,
+        SerializedCommitEvent,
+        Option[EventMessage]) =
       execute {
         sql"""select event_id, project_id, status, created_date, execution_date, event_date, event_body, message
              |from event_log  
@@ -127,7 +133,7 @@ class EventLogAddSpec extends WordSpec with InMemoryEventLogDbSpec with MockFact
                   CreatedDate,
                   ExecutionDate,
                   CommittedDate,
-                  EventBody,
+                  SerializedCommitEvent,
                   Option[EventMessage])]
           .unique
       }

@@ -28,7 +28,7 @@ import cats.data.NonEmptyList
 import ch.datascience.generators.Generators.Implicits._
 import ch.datascience.generators.Generators._
 import ch.datascience.graph.model.events.EventsGenerators._
-import ch.datascience.graph.model.events.{CommitEventId, ProjectId}
+import ch.datascience.graph.model.events.{CommitEventId, ProjectId, SerializedCommitEvent}
 import doobie.implicits._
 import eu.timepit.refined.auto._
 import org.scalamock.scalatest.MockFactory
@@ -42,17 +42,21 @@ class EventLogFetchSpec extends WordSpec with InMemoryEventLogDbSpec with MockFa
   "isEventToProcess" should {
 
     s"return true if there are events with with status $New and execution date in the past" in new TestCase {
-      storeNewEvent(commitEventIds.generateOne, ExecutionDate(now minus (5, SECONDS)), eventBodies.generateOne)
+      storeNewEvent(commitEventIds.generateOne,
+                    ExecutionDate(now minus (5, SECONDS)),
+                    serializedCommitEvents.generateOne)
 
       eventLogFetch.isEventToProcess.unsafeRunSync() shouldBe true
     }
 
     s"return true if there are events with with status $TriplesStoreFailure and execution date in the past" in new TestCase {
-      storeEvent(commitEventIds.generateOne,
-                 EventStatus.TriplesStoreFailure,
-                 ExecutionDate(now minus (5, SECONDS)),
-                 committedDates.generateOne,
-                 eventBodies.generateOne)
+      storeEvent(
+        commitEventIds.generateOne,
+        EventStatus.TriplesStoreFailure,
+        ExecutionDate(now minus (5, SECONDS)),
+        committedDates.generateOne,
+        serializedCommitEvents.generateOne
+      )
 
       eventLogFetch.isEventToProcess.unsafeRunSync() shouldBe true
     }
@@ -63,7 +67,7 @@ class EventLogFetchSpec extends WordSpec with InMemoryEventLogDbSpec with MockFa
         EventStatus.Processing,
         ExecutionDate(now minus (MaxProcessingTime.toMinutes + 1, MINUTES)),
         committedDates.generateOne,
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
 
       eventLogFetch.isEventToProcess.unsafeRunSync() shouldBe true
@@ -75,28 +79,32 @@ class EventLogFetchSpec extends WordSpec with InMemoryEventLogDbSpec with MockFa
         EventStatus.Processing,
         ExecutionDate(now minus (MaxProcessingTime.toMinutes - 1, MINUTES)),
         committedDates.generateOne,
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
       storeEvent(commitEventIds.generateOne,
                  EventStatus.New,
                  ExecutionDate(now plus (5, SECONDS)),
                  committedDates.generateOne,
-                 eventBodies.generateOne)
-      storeEvent(commitEventIds.generateOne,
-                 EventStatus.TriplesStoreFailure,
-                 ExecutionDate(now plus (5, SECONDS)),
-                 committedDates.generateOne,
-                 eventBodies.generateOne)
-      storeEvent(commitEventIds.generateOne,
-                 EventStatus.NonRecoverableFailure,
-                 ExecutionDate(now minus (5, SECONDS)),
-                 committedDates.generateOne,
-                 eventBodies.generateOne)
+                 serializedCommitEvents.generateOne)
+      storeEvent(
+        commitEventIds.generateOne,
+        EventStatus.TriplesStoreFailure,
+        ExecutionDate(now plus (5, SECONDS)),
+        committedDates.generateOne,
+        serializedCommitEvents.generateOne
+      )
+      storeEvent(
+        commitEventIds.generateOne,
+        EventStatus.NonRecoverableFailure,
+        ExecutionDate(now minus (5, SECONDS)),
+        committedDates.generateOne,
+        serializedCommitEvents.generateOne
+      )
       storeEvent(commitEventIds.generateOne,
                  EventStatus.TriplesStore,
                  ExecutionDate(now minus (5, SECONDS)),
                  committedDates.generateOne,
-                 eventBodies.generateOne)
+                 serializedCommitEvents.generateOne)
 
       eventLogFetch.isEventToProcess.unsafeRunSync() shouldBe false
     }
@@ -111,15 +119,15 @@ class EventLogFetchSpec extends WordSpec with InMemoryEventLogDbSpec with MockFa
       val projectId = projectIds.generateOne
 
       val event1Id   = commitEventIds.generateOne.copy(projectId = projectId)
-      val event1Body = eventBodies.generateOne
+      val event1Body = serializedCommitEvents.generateOne
       storeNewEvent(event1Id, ExecutionDate(now minus (5, SECONDS)), event1Body)
 
       val event2Id   = commitEventIds.generateOne.copy(projectId = projectId)
-      val event2Body = eventBodies.generateOne
+      val event2Body = serializedCommitEvents.generateOne
       storeNewEvent(event2Id, ExecutionDate(now plus (5, HOURS)), event2Body)
 
       val event3Id   = commitEventIds.generateOne.copy(projectId = projectId)
-      val event3Body = eventBodies.generateOne
+      val event3Body = serializedCommitEvents.generateOne
       storeEvent(event3Id,
                  EventStatus.TriplesStoreFailure,
                  ExecutionDate(now minus (5, HOURS)),
@@ -142,15 +150,15 @@ class EventLogFetchSpec extends WordSpec with InMemoryEventLogDbSpec with MockFa
     s"find event with the $Processing status " +
       s"and execution date older than $MaxProcessingTime" in new TestCase {
 
-      val eventId   = commitEventIds.generateOne
-      val eventBody = eventBodies.generateOne
+      val eventId         = commitEventIds.generateOne
+      val serializedEvent = serializedCommitEvents.generateOne
       storeEvent(eventId,
                  EventStatus.Processing,
                  ExecutionDate(now minus (MaxProcessingTime.toMinutes + 1, MINUTES)),
                  committedDates.generateOne,
-                 eventBody)
+                 serializedEvent)
 
-      eventLogFetch.popEventToProcess.unsafeRunSync() shouldBe Some(eventBody)
+      eventLogFetch.popEventToProcess.unsafeRunSync() shouldBe Some(serializedEvent)
 
       findEvents(EventStatus.Processing) shouldBe List(eventId -> executionDate)
     }
@@ -163,7 +171,7 @@ class EventLogFetchSpec extends WordSpec with InMemoryEventLogDbSpec with MockFa
         EventStatus.Processing,
         ExecutionDate(now minus (9, MINUTES)),
         committedDates.generateOne,
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
 
       eventLogFetch.popEventToProcess.unsafeRunSync() shouldBe None
@@ -174,7 +182,7 @@ class EventLogFetchSpec extends WordSpec with InMemoryEventLogDbSpec with MockFa
       storeNewEvent(
         commitEventIds.generateOne,
         ExecutionDate(now plus (5, HOURS)),
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
 
       eventLogFetch.popEventToProcess.unsafeRunSync() shouldBe None
@@ -185,14 +193,15 @@ class EventLogFetchSpec extends WordSpec with InMemoryEventLogDbSpec with MockFa
 
       val allProjectIds = nonEmptyList(projectIds, minElements = 2).generateOne
       val eventIdsBodiesDates = for {
-        projectId     <- allProjectIds
-        eventId       <- nonEmptyList(commitIds, minElements = 5).generateOne map (CommitEventId(_, projectId))
-        eventBody     <- nonEmptyList(eventBodies, maxElements = 1).generateOne
-        executionDate <- NonEmptyList.of(executionDateDifferentiated(by = projectId, allProjectIds))
-      } yield (eventId, executionDate, eventBody)
+        projectId       <- allProjectIds
+        eventId         <- nonEmptyList(commitIds, minElements = 5).generateOne map (CommitEventId(_, projectId))
+        serializedEvent <- nonEmptyList(serializedCommitEvents, maxElements = 1).generateOne
+        executionDate   <- NonEmptyList.of(executionDateDifferentiated(by = projectId, allProjectIds))
+      } yield (eventId, executionDate, serializedEvent)
 
       eventIdsBodiesDates.toList foreach {
-        case (eventId, eventExecutionDate, eventBody) => storeNewEvent(eventId, eventExecutionDate, eventBody)
+        case (eventId, eventExecutionDate, serializedEvent) =>
+          storeNewEvent(eventId, eventExecutionDate, serializedEvent)
       }
 
       findEvents(EventStatus.Processing) shouldBe List.empty
@@ -224,6 +233,8 @@ class EventLogFetchSpec extends WordSpec with InMemoryEventLogDbSpec with MockFa
       ExecutionDate(now minus (1000 - (allProjects.toList.indexOf(by) * 10), SECONDS))
   }
 
-  private def storeNewEvent(commitEventId: CommitEventId, executionDate: ExecutionDate, eventBody: EventBody): Unit =
-    storeEvent(commitEventId, New, executionDate, committedDates.generateOne, eventBody)
+  private def storeNewEvent(commitEventId:   CommitEventId,
+                            executionDate:   ExecutionDate,
+                            serializedEvent: SerializedCommitEvent): Unit =
+    storeEvent(commitEventId, New, executionDate, committedDates.generateOne, serializedEvent)
 }

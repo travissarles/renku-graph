@@ -29,8 +29,8 @@ package object commands {
   implicit val projectIdGet: Get[ProjectId] = Get[Int].tmap(ProjectId.apply)
   implicit val projectIdPut: Put[ProjectId] = Put[Int].contramap(_.value)
 
-  implicit val eventBodyGet: Get[EventBody] = Get[String].tmap(EventBody.apply)
-  implicit val eventBodyPut: Put[EventBody] = Put[String].contramap(_.value)
+  implicit val serializedEventGet: Get[SerializedCommitEvent] = Get[String].tmap(SerializedCommitEvent.apply)
+  implicit val serializedEventPut: Put[SerializedCommitEvent] = Put[String].contramap(_.value)
 
   implicit val createdDateGet: Get[CreatedDate] = Get[Instant].tmap(CreatedDate.apply)
   implicit val createdDatePut: Put[CreatedDate] = Put[Instant].contramap(_.value)

@@ -17,28 +17,39 @@
  */
 
 package ch.datascience.webhookservice.eventprocessing.commitevent
+
 import cats.MonadError
-import cats.effect.Bracket
 import cats.implicits._
-import ch.datascience.db.DbTransactor
-import ch.datascience.dbeventlog.EventLogDB
-import ch.datascience.dbeventlog.commands.EventLogAdd
+import ch.datascience.generators.Generators.Implicits._
+import ch.datascience.graph.model.events.EventsGenerators._
+import ch.datascience.graph.model.events.SerializedCommitEvent
 import ch.datascience.webhookservice.audit.AuditLog
+import org.scalamock.scalatest.MockFactory
+import org.scalatest.Matchers._
+import org.scalatest.WordSpec
 
 import scala.util.Try
 
-class TryCommitEventSender(
-    commitEventSerializer: CommitEventSerializer[Try],
-    auditLogSender:        AuditLogPush[Try],
-    eventLogAdd:           EventLogAdd[Try]
-)(implicit ME:             MonadError[Try, Throwable])
-    extends CommitEventSender[Try](commitEventSerializer, auditLogSender, eventLogAdd)
+class AuditLogPushSpec extends WordSpec with MockFactory {
 
-private class TryCommitEventSerializer extends CommitEventSerializer[Try]
+  "pushToAuditLog" should {
 
-class TryEventLogAdd(
-    transactor: DbTransactor[Try, EventLogDB]
-)(implicit ME:  Bracket[Try, Throwable])
-    extends EventLogAdd[Try](transactor)
+    "be successful if sending the given Commit Event to the AuditLog succeed" in new TestCase {
+      val serializedEvent = serializedCommitEvents.generateOne
 
-private class TryAuditLogPush(auditLog: AuditLog[Try]) extends AuditLogPush[Try](auditLog)
+      (auditLog
+        .push(_: SerializedCommitEvent))
+        .expects(serializedEvent)
+        .returning(context.unit)
+
+      auditLogPush.pushToAuditLog(serializedEvent) shouldBe context.unit
+    }
+  }
+
+  private trait TestCase {
+    val context = MonadError[Try, Throwable]
+
+    val auditLog     = mock[AuditLog[Try]]
+    val auditLogPush = new AuditLogPush[Try](auditLog)
+  }
+}

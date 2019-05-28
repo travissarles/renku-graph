@@ -71,21 +71,29 @@ class EventsSynchronizationScheduler[Interpretation[_]](
   }
 }
 
-class IOEventsSynchronizationScheduler(
-    transactor:                     DbTransactor[IO, EventLogDB],
-    gitLabThrottler:                Throttler[IO, GitLab],
-    eventsSynchronizationThrottler: Throttler[IO, EventsSynchronization]
-)(implicit timer:                   Timer[IO], contextShift: ContextShift[IO], executionContext: ExecutionContext)
-    extends EventsSynchronizationScheduler[IO](
-      new SchedulerConfigProvider[IO](),
-      new IOMissedEventsLoader(
-        new IOEventLogLatestEvents(transactor),
-        new IOAccessTokenFinder(new TokenRepositoryUrlProvider[IO](), ApplicationLogger),
-        new IOLatestCommitFinder(new GitLabConfigProvider[IO], gitLabThrottler, ApplicationLogger),
-        new IOProjectInfoFinder(new GitLabConfigProvider[IO], gitLabThrottler, ApplicationLogger),
-        new IOCommitToEventLog(transactor, gitLabThrottler),
-        eventsSynchronizationThrottler,
-        ApplicationLogger,
-        new ExecutionTimeRecorder[IO]
+object IOEventsSynchronizationScheduler {
+
+  def apply(
+      transactor:                     DbTransactor[IO, EventLogDB],
+      gitLabThrottler:                Throttler[IO, GitLab],
+      eventsSynchronizationThrottler: Throttler[IO, EventsSynchronization]
+  )(implicit timer:                   Timer[IO],
+    contextShift:                     ContextShift[IO],
+    executionContext:                 ExecutionContext): IO[EventsSynchronizationScheduler[IO]] =
+    for {
+      commitToEventLog <- IOCommitToEventLog(transactor, gitLabThrottler)
+    } yield
+      new EventsSynchronizationScheduler[IO](
+        new SchedulerConfigProvider[IO](),
+        new IOMissedEventsLoader(
+          new IOEventLogLatestEvents(transactor),
+          new IOAccessTokenFinder(new TokenRepositoryUrlProvider[IO](), ApplicationLogger),
+          new IOLatestCommitFinder(new GitLabConfigProvider[IO], gitLabThrottler, ApplicationLogger),
+          new IOProjectInfoFinder(new GitLabConfigProvider[IO], gitLabThrottler, ApplicationLogger),
+          commitToEventLog,
+          eventsSynchronizationThrottler,
+          ApplicationLogger,
+          new ExecutionTimeRecorder[IO]
+        )
       )
-    )
+}

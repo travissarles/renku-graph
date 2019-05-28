@@ -130,8 +130,16 @@ private object HookEventEndpoint {
   }
 }
 
-class IOHookEventEndpoint(
-    transactor:              DbTransactor[IO, EventLogDB],
-    gitLabThrottler:         Throttler[IO, GitLab]
-)(implicit executionContext: ExecutionContext, contextShift: ContextShift[IO], clock: Clock[IO], timer: Timer[IO])
-    extends HookEventEndpoint[IO](HookTokenCrypto[IO], new IOCommitToEventLog(transactor, gitLabThrottler))
+object IOHookEventEndpoint {
+
+  def apply(
+      transactor:              DbTransactor[IO, EventLogDB],
+      gitLabThrottler:         Throttler[IO, GitLab]
+  )(implicit executionContext: ExecutionContext,
+    contextShift:              ContextShift[IO],
+    clock:                     Clock[IO],
+    timer:                     Timer[IO]): IO[HookEventEndpoint[IO]] =
+    for {
+      commitToEventLog <- IOCommitToEventLog(transactor, gitLabThrottler)
+    } yield new HookEventEndpoint[IO](HookTokenCrypto[IO], commitToEventLog)
+}

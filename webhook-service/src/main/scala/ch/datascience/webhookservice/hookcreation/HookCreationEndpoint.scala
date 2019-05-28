@@ -67,11 +67,19 @@ class HookCreationEndpoint[Interpretation[_]: Effect](
   }
 }
 
-class IOHookCreationEndpoint(
-    transactor:              DbTransactor[IO, EventLogDB],
-    gitLabThrottler:         Throttler[IO, GitLab]
-)(implicit executionContext: ExecutionContext, contextShift: ContextShift[IO], clock: Clock[IO], timer: Timer[IO])
-    extends HookCreationEndpoint[IO](
-      new IOHookCreator(transactor, gitLabThrottler),
-      new AccessTokenExtractor[IO]
-    )
+object IOHookCreationEndpoint {
+  def apply(
+      transactor:              DbTransactor[IO, EventLogDB],
+      gitLabThrottler:         Throttler[IO, GitLab]
+  )(implicit executionContext: ExecutionContext,
+    contextShift:              ContextShift[IO],
+    clock:                     Clock[IO],
+    timer:                     Timer[IO]): IO[HookCreationEndpoint[IO]] =
+    for {
+      hookCreator <- IOHookCreator(transactor, gitLabThrottler)
+    } yield
+      new HookCreationEndpoint[IO](
+        hookCreator,
+        new AccessTokenExtractor[IO]
+      )
+}

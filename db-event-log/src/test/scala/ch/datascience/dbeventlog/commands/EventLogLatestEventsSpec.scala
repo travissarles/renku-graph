@@ -44,7 +44,7 @@ class EventLogLatestEventsSpec extends WordSpec with InMemoryEventLogDbSpec {
         eventStatuses.generateOne,
         executionDates.generateOne,
         CommittedDate(now minus (20, DAYS)),
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
 
       val youngestCommitEventIdProject1 = commitEventIds.generateOne.copy(projectId = projectId1)
@@ -53,7 +53,7 @@ class EventLogLatestEventsSpec extends WordSpec with InMemoryEventLogDbSpec {
         eventStatuses.generateOne,
         executionDates.generateOne,
         CommittedDate(now minus (3, DAYS)),
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
 
       val onlyCommitEventIdProject2 = commitEventIds.generateOne
@@ -62,7 +62,7 @@ class EventLogLatestEventsSpec extends WordSpec with InMemoryEventLogDbSpec {
         eventStatuses.generateOne,
         executionDates.generateOne,
         CommittedDate(now minus (2, DAYS)),
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
 
       latestEventsFinder.findAllLatestEvents.unsafeRunSync() shouldBe List(

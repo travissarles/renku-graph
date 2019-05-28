@@ -28,7 +28,7 @@ import cats.implicits._
 import ch.datascience.db.DbTransactor
 import ch.datascience.dbeventlog.EventStatus._
 import ch.datascience.dbeventlog._
-import ch.datascience.graph.model.events.CommitEventId
+import ch.datascience.graph.model.events.{CommitEventId, SerializedCommitEvent}
 import doobie.free.connection.ConnectionOp
 import doobie.implicits._
 import doobie.util.fragments._
@@ -50,7 +50,7 @@ class EventLogFetch[Interpretation[_]](
   def isEventToProcess: Interpretation[Boolean] =
     findOldestEvent.transact(transactor.get).map(_.isDefined)
 
-  def popEventToProcess: Interpretation[Option[EventBody]] =
+  def popEventToProcess: Interpretation[Option[SerializedCommitEvent]] =
     findEventAndUpdateForProcessing.transact(transactor.get)
 
   private def findEventAndUpdateForProcessing =
@@ -92,23 +92,23 @@ class EventLogFetch[Interpretation[_]](
     case many          => many.get(Random.nextInt(many.size))
   }
 
-  private lazy val markAsProcessing: Option[EventIdAndBody] => Free[ConnectionOp, Option[EventBody]] = {
-    case None => Free.pure[ConnectionOp, Option[EventBody]](None)
-    case Some((commitEventId, eventBody)) =>
+  private lazy val markAsProcessing: Option[EventIdAndBody] => Free[ConnectionOp, Option[SerializedCommitEvent]] = {
+    case None => Free.pure[ConnectionOp, Option[SerializedCommitEvent]](None)
+    case Some((commitEventId, serializedEvent)) =>
       sql"""update event_log 
            |set status = ${EventStatus.Processing: EventStatus}, execution_date = ${now()}
            |where (event_id = ${commitEventId.id} and project_id = ${commitEventId.projectId} and status <> ${Processing: EventStatus})
            |  or (event_id = ${commitEventId.id} and project_id = ${commitEventId.projectId} and status = ${Processing: EventStatus} and execution_date < ${now() minus MaxProcessingTime})
            |""".stripMargin.update.run
-        .map(toNoneIfEventAlreadyTaken(eventBody))
+        .map(toNoneIfEventAlreadyTaken(serializedEvent))
   }
 
-  private def toNoneIfEventAlreadyTaken(eventBody: EventBody): Int => Option[EventBody] = {
+  private def toNoneIfEventAlreadyTaken(serializedEvent: SerializedCommitEvent): Int => Option[SerializedCommitEvent] = {
     case 0 => None
-    case 1 => Some(eventBody)
+    case 1 => Some(serializedEvent)
   }
 
-  private type EventIdAndBody = (CommitEventId, EventBody)
+  private type EventIdAndBody = (CommitEventId, SerializedCommitEvent)
 }
 
 class IOEventLogFetch(

@@ -114,17 +114,26 @@ private object HookCreator {
   )
 }
 
-private class IOHookCreator(
-    transactor:              DbTransactor[IO, EventLogDB],
-    gitLabThrottler:         Throttler[IO, GitLab]
-)(implicit executionContext: ExecutionContext, contextShift: ContextShift[IO], clock: Clock[IO], timer: Timer[IO])
-    extends HookCreator[IO](
-      new IOProjectHookUrlFinder,
-      new IOHookValidator(gitLabThrottler),
-      new IOProjectInfoFinder(new GitLabConfigProvider[IO], gitLabThrottler, ApplicationLogger),
-      HookTokenCrypto[IO],
-      new IOProjectHookCreator(new GitLabConfigProvider[IO], gitLabThrottler, ApplicationLogger),
-      new IOAccessTokenAssociator(new TokenRepositoryUrlProvider[IO](), ApplicationLogger),
-      new IOEventsHistoryLoader(transactor, gitLabThrottler),
-      ApplicationLogger
-    )
+private object IOHookCreator {
+
+  def apply(
+      transactor:              DbTransactor[IO, EventLogDB],
+      gitLabThrottler:         Throttler[IO, GitLab]
+  )(implicit executionContext: ExecutionContext,
+    contextShift:              ContextShift[IO],
+    clock:                     Clock[IO],
+    timer:                     Timer[IO]): IO[HookCreator[IO]] =
+    for {
+      eventsHistoryLoader <- IOEventsHistoryLoader(transactor, gitLabThrottler)
+    } yield
+      new HookCreator[IO](
+        new IOProjectHookUrlFinder,
+        new IOHookValidator(gitLabThrottler),
+        new IOProjectInfoFinder(new GitLabConfigProvider[IO], gitLabThrottler, ApplicationLogger),
+        HookTokenCrypto[IO],
+        new IOProjectHookCreator(new GitLabConfigProvider[IO], gitLabThrottler, ApplicationLogger),
+        new IOAccessTokenAssociator(new TokenRepositoryUrlProvider[IO](), ApplicationLogger),
+        eventsHistoryLoader,
+        ApplicationLogger
+      )
+}

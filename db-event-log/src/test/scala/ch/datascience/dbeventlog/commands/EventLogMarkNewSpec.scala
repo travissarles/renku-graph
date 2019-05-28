@@ -24,7 +24,7 @@ import ch.datascience.dbeventlog.DbEventLogGenerators._
 import ch.datascience.dbeventlog.{EventStatus, ExecutionDate}
 import EventStatus._
 import ch.datascience.generators.Generators.Implicits._
-import ch.datascience.graph.model.events.EventsGenerators.{commitEventIds, committedDates}
+import ch.datascience.graph.model.events.EventsGenerators._
 import org.scalamock.scalatest.MockFactory
 import org.scalatest.Matchers._
 import org.scalatest.WordSpec
@@ -41,17 +41,19 @@ class EventLogMarkNewSpec extends WordSpec with InMemoryEventLogDbSpec with Mock
                  EventStatus.Processing,
                  executionDates.generateOne,
                  committedDates.generateOne,
-                 eventBodies.generateOne)
-      storeEvent(commitEventIds.generateOne.copy(id = eventId.id),
-                 EventStatus.Processing,
-                 executionDates.generateOne,
-                 committedDates.generateOne,
-                 eventBodies.generateOne)
+                 serializedCommitEvents.generateOne)
+      storeEvent(
+        commitEventIds.generateOne.copy(id = eventId.id),
+        EventStatus.Processing,
+        executionDates.generateOne,
+        committedDates.generateOne,
+        serializedCommitEvents.generateOne
+      )
       storeEvent(commitEventIds.generateOne,
                  EventStatus.Processing,
                  executionDates.generateOne,
                  committedDates.generateOne,
-                 eventBodies.generateOne)
+                 serializedCommitEvents.generateOne)
 
       eventLogMarkNew.markEventNew(eventId).unsafeRunSync() shouldBe ((): Unit)
 
@@ -63,7 +65,7 @@ class EventLogMarkNewSpec extends WordSpec with InMemoryEventLogDbSpec with Mock
       val eventId       = commitEventIds.generateOne
       val eventStatus   = eventStatuses generateDifferentThan Processing
       val executionDate = executionDates.generateOne
-      storeEvent(eventId, eventStatus, executionDate, committedDates.generateOne, eventBodies.generateOne)
+      storeEvent(eventId, eventStatus, executionDate, committedDates.generateOne, serializedCommitEvents.generateOne)
 
       intercept[RuntimeException] {
         eventLogMarkNew.markEventNew(eventId).unsafeRunSync()

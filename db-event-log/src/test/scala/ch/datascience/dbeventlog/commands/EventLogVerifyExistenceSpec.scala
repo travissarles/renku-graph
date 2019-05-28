@@ -34,7 +34,7 @@ class EventLogVerifyExistenceSpec extends WordSpec with InMemoryEventLogDbSpec {
         eventStatuses.generateOne,
         executionDates.generateOne,
         committedDates.generateOne,
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
 
       existenceVerification.filterNotExistingInLog(List.empty, projectId).unsafeRunSync() shouldBe List.empty
@@ -47,7 +47,7 @@ class EventLogVerifyExistenceSpec extends WordSpec with InMemoryEventLogDbSpec {
         eventStatuses.generateOne,
         executionDates.generateOne,
         committedDates.generateOne,
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
       val eventId2 = commitEventIds.generateOne.copy(projectId = projectId)
       storeEvent(
@@ -55,7 +55,7 @@ class EventLogVerifyExistenceSpec extends WordSpec with InMemoryEventLogDbSpec {
         eventStatuses.generateOne,
         executionDates.generateOne,
         committedDates.generateOne,
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
 
       existenceVerification
@@ -70,7 +70,7 @@ class EventLogVerifyExistenceSpec extends WordSpec with InMemoryEventLogDbSpec {
         eventStatuses.generateOne,
         executionDates.generateOne,
         committedDates.generateOne,
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
       val eventId2 = commitEventIds.generateOne
       storeEvent(
@@ -78,7 +78,7 @@ class EventLogVerifyExistenceSpec extends WordSpec with InMemoryEventLogDbSpec {
         eventStatuses.generateOne,
         executionDates.generateOne,
         committedDates.generateOne,
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
       val eventId3 = commitEventIds.generateOne.copy(projectId = projectId)
       storeEvent(
@@ -86,7 +86,7 @@ class EventLogVerifyExistenceSpec extends WordSpec with InMemoryEventLogDbSpec {
         eventStatuses.generateOne,
         executionDates.generateOne,
         committedDates.generateOne,
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
       val eventId4 = commitEventIds.generateOne.copy(id = eventId1.id)
       storeEvent(
@@ -94,7 +94,7 @@ class EventLogVerifyExistenceSpec extends WordSpec with InMemoryEventLogDbSpec {
         eventStatuses.generateOne,
         executionDates.generateOne,
         committedDates.generateOne,
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
 
       existenceVerification
@@ -110,7 +110,7 @@ class EventLogVerifyExistenceSpec extends WordSpec with InMemoryEventLogDbSpec {
         eventStatuses.generateOne,
         executionDates.generateOne,
         committedDates.generateOne,
-        eventBodies.generateOne
+        serializedCommitEvents.generateOne
       )
 
       existenceVerification.filterNotExistingInLog(List(eventId1.id), projectId).unsafeRunSync() shouldBe List(

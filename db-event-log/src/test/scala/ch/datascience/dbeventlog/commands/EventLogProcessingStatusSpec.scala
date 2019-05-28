@@ -22,12 +22,12 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit._
 
 import cats.data.NonEmptyList
-import ch.datascience.dbeventlog.DbEventLogGenerators.{eventBodies, eventStatuses, executionDates}
+import ch.datascience.dbeventlog.DbEventLogGenerators.{eventStatuses, executionDates}
 import ch.datascience.dbeventlog.EventStatus._
 import ch.datascience.dbeventlog.{CreatedDate, EventStatus}
 import ch.datascience.generators.Generators.Implicits._
 import ch.datascience.generators.Generators._
-import ch.datascience.graph.model.events.EventsGenerators.{commitEventIds, committedDates, projectIds}
+import ch.datascience.graph.model.events.EventsGenerators._
 import ch.datascience.graph.model.events.ProjectId
 import eu.timepit.refined.auto._
 import org.scalacheck.Gen
@@ -105,7 +105,7 @@ class EventLogProcessingStatusSpec extends WordSpec with InMemoryEventLogDbSpec 
         _,
         executionDates.generateOne,
         committedDates.generateOne,
-        eventBodies.generateOne,
+        serializedCommitEvents.generateOne,
         CreatedDate(Instant.now)
       )
     }
@@ -116,7 +116,7 @@ class EventLogProcessingStatusSpec extends WordSpec with InMemoryEventLogDbSpec 
         _,
         executionDates.generateOne,
         committedDates.generateOne,
-        eventBodies.generateOne,
+        serializedCommitEvents.generateOne,
         CreatedDate(Instant.now.minus(122, SECONDS))
       )
     }
@@ -127,7 +127,7 @@ class EventLogProcessingStatusSpec extends WordSpec with InMemoryEventLogDbSpec 
         _,
         executionDates.generateOne,
         committedDates.generateOne,
-        eventBodies.generateOne,
+        serializedCommitEvents.generateOne,
         CreatedDate(Instant.now.minus(2, DAYS))
       )
     }

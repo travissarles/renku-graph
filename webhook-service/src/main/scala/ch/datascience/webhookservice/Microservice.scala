@@ -59,19 +59,24 @@ object Microservice extends IOApp {
         gitLabThrottler                <- GitLabThrottler[IO](gitLabRateLimitProvider)
         eventsSynchronizationThrottler <- EventsSynchronizationThrottler[IO](gitLabRateLimitProvider)
 
+        hookEventEndpoint    <- IOHookEventEndpoint(transactor, gitLabThrottler)
+        hookCreationEndpoint <- IOHookCreationEndpoint(transactor, gitLabThrottler)
         httpServer = new HttpServer[IO](
           serverPort = 9001,
           serviceRoutes = new MicroserviceRoutes[IO](
-            new IOHookEventEndpoint(transactor, gitLabThrottler),
-            new IOHookCreationEndpoint(transactor, gitLabThrottler),
+            hookEventEndpoint,
+            hookCreationEndpoint,
             new IOHookValidationEndpoint(gitLabThrottler),
             new IOProcessingStatusEndpoint(transactor, gitLabThrottler)
           ).routes
         )
 
+        eventsSynchronizationScheduler <- IOEventsSynchronizationScheduler(transactor,
+                                                                           gitLabThrottler,
+                                                                           eventsSynchronizationThrottler)
         exitCode <- new MicroserviceRunner(
                      new IOEventLogDbInitializer(transactor),
-                     new IOEventsSynchronizationScheduler(transactor, gitLabThrottler, eventsSynchronizationThrottler),
+                     eventsSynchronizationScheduler,
                      httpServer
                    ) run args
       } yield exitCode

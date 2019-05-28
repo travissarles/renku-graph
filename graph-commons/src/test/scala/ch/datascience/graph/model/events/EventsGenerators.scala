@@ -70,4 +70,7 @@ object EventsGenerators {
     committer     <- users
     parentsIds    <- parentsIdsLists()
   } yield CommitEvent(commitId, project, message, committedDate, author, committer, parentsIds)
+
+  implicit val serializedCommitEvents: Gen[SerializedCommitEvent] =
+    jsons.map(_.noSpaces).map(SerializedCommitEvent.apply)
 }

@@ -23,9 +23,6 @@ import java.time.Instant
 import ch.datascience.tinytypes.constraints.{InstantNotInTheFuture, NonBlank}
 import ch.datascience.tinytypes.{TinyType, TinyTypeFactory}
 
-final class EventBody private (val value: String) extends AnyVal with TinyType[String]
-object EventBody extends TinyTypeFactory[String, EventBody](new EventBody(_)) with NonBlank
-
 final class CreatedDate private (val value: Instant) extends AnyVal with TinyType[Instant]
 object CreatedDate extends TinyTypeFactory[Instant, CreatedDate](new CreatedDate(_)) with InstantNotInTheFuture
 

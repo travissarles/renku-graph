@@ -23,28 +23,35 @@ import cats.implicits._
 import cats.{Monad, MonadError}
 import ch.datascience.db.DbTransactor
 import ch.datascience.dbeventlog.commands.{EventLogAdd, IOEventLogAdd}
-import ch.datascience.dbeventlog.{EventBody, EventLogDB}
-import ch.datascience.graph.model.events.CommitEvent
+import ch.datascience.dbeventlog.EventLogDB
+import ch.datascience.graph.model.events.{CommitEvent, SerializedCommitEvent}
 
 import scala.language.higherKinds
 
 class CommitEventSender[Interpretation[_]: Monad](
     commitEventSerializer: CommitEventSerializer[Interpretation],
+    auditLogSender:        AuditLogPush[Interpretation],
     eventLogAdd:           EventLogAdd[Interpretation]
 )(implicit ME:             MonadError[Interpretation, Throwable]) {
 
+  import auditLogSender._
   import commitEventSerializer._
   import eventLogAdd._
 
   def send(commitEvent: CommitEvent): Interpretation[Unit] =
     for {
       serialisedEvent <- serialiseToJsonString(commitEvent)
-      eventBody       <- ME.fromEither(EventBody.from(serialisedEvent))
-      _               <- storeNewEvent(commitEvent, eventBody)
+      serializedEvent <- ME.fromEither(SerializedCommitEvent.from(serialisedEvent))
+      _               <- pushToAuditLog(serializedEvent)
+      _               <- storeNewEvent(commitEvent, serializedEvent)
     } yield ()
 }
 
-class IOCommitEventSender(
-    transactor:          DbTransactor[IO, EventLogDB]
-)(implicit contextShift: ContextShift[IO], ME: MonadError[IO, Throwable])
-    extends CommitEventSender[IO](new CommitEventSerializer[IO], new IOEventLogAdd(transactor))
+object IOCommitEventSender {
+  def apply(
+      transactor:          DbTransactor[IO, EventLogDB]
+  )(implicit contextShift: ContextShift[IO], ME: MonadError[IO, Throwable]): IO[CommitEventSender[IO]] =
+    for {
+      auditLogSender <- IOAuditLogPush()
+    } yield new CommitEventSender[IO](new CommitEventSerializer[IO], auditLogSender, new IOEventLogAdd(transactor))
+}

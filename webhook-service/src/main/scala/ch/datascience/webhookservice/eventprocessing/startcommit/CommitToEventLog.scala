@@ -121,14 +121,23 @@ private object CommitToEventLog {
   }
 }
 
-class IOCommitToEventLog(
-    transactor:              DbTransactor[IO, EventLogDB],
-    gitLabThrottler:         Throttler[IO, GitLab]
-)(implicit executionContext: ExecutionContext, contextShift: ContextShift[IO], clock: Clock[IO], timer: Timer[IO])
-    extends CommitToEventLog[IO](
-      new IOAccessTokenFinder(new TokenRepositoryUrlProvider[IO](), ApplicationLogger),
-      new IOCommitEventsSourceBuilder(transactor, gitLabThrottler),
-      new IOCommitEventSender(transactor),
-      ApplicationLogger,
-      new ExecutionTimeRecorder[IO]
-    )
+object IOCommitToEventLog {
+
+  def apply(
+      transactor:              DbTransactor[IO, EventLogDB],
+      gitLabThrottler:         Throttler[IO, GitLab]
+  )(implicit executionContext: ExecutionContext,
+    contextShift:              ContextShift[IO],
+    clock:                     Clock[IO],
+    timer:                     Timer[IO]): IO[CommitToEventLog[IO]] =
+    for {
+      commitEventSender <- IOCommitEventSender(transactor)
+    } yield
+      new CommitToEventLog[IO](
+        new IOAccessTokenFinder(new TokenRepositoryUrlProvider[IO](), ApplicationLogger),
+        new IOCommitEventsSourceBuilder(transactor, gitLabThrottler),
+        commitEventSender,
+        ApplicationLogger,
+        new ExecutionTimeRecorder[IO]
+      )
+}

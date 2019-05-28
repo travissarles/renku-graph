@@ -24,7 +24,7 @@ import EventStatus._
 import ch.datascience.generators.Generators.Implicits._
 import ch.datascience.generators.Generators._
 import ch.datascience.graph.model.events.CommitEventId
-import ch.datascience.graph.model.events.EventsGenerators.{commitEventIds, committedDates}
+import ch.datascience.graph.model.events.EventsGenerators._
 import doobie.implicits._
 import org.scalacheck.Gen
 import org.scalamock.scalatest.MockFactory
@@ -40,17 +40,19 @@ class EventLogMarkFailedSpec extends WordSpec with InMemoryEventLogDbSpec with M
     s"set the given $TriplesStoreFailure status and message on event with the given id and project " +
       s"if the event has status $Processing" in new TestCase {
 
-      storeEvent(commitEventIds.generateOne.copy(id = eventId.id),
-                 EventStatus.Processing,
-                 executionDate,
-                 committedDates.generateOne,
-                 eventBodies.generateOne,
-                 createdDate)
+      storeEvent(
+        commitEventIds.generateOne.copy(id = eventId.id),
+        EventStatus.Processing,
+        executionDate,
+        committedDates.generateOne,
+        serializedCommitEvents.generateOne,
+        createdDate
+      )
       storeEvent(eventId,
                  EventStatus.Processing,
                  executionDate,
                  committedDates.generateOne,
-                 eventBodies.generateOne,
+                 serializedCommitEvents.generateOne,
                  createdDate)
 
       val maybeMessage     = Gen.option(eventMessages).generateOne
@@ -70,17 +72,19 @@ class EventLogMarkFailedSpec extends WordSpec with InMemoryEventLogDbSpec with M
     s"set the given $NonRecoverableFailure status and message on event with the given id and project " +
       s"if the event has status $Processing" in new TestCase {
 
-      storeEvent(commitEventIds.generateOne.copy(id = eventId.id),
-                 EventStatus.Processing,
-                 executionDate,
-                 committedDates.generateOne,
-                 eventBodies.generateOne,
-                 createdDate)
+      storeEvent(
+        commitEventIds.generateOne.copy(id = eventId.id),
+        EventStatus.Processing,
+        executionDate,
+        committedDates.generateOne,
+        serializedCommitEvents.generateOne,
+        createdDate
+      )
       storeEvent(eventId,
                  EventStatus.Processing,
                  executionDate,
                  committedDates.generateOne,
-                 eventBodies.generateOne,
+                 serializedCommitEvents.generateOne,
                  createdDate)
 
       val maybeMessage     = nestedExceptions.map(EventMessage.apply).generateOne
@@ -100,7 +104,12 @@ class EventLogMarkFailedSpec extends WordSpec with InMemoryEventLogDbSpec with M
     s"do nothing when setting $TriplesStoreFailure and event status is different than $Processing" in new TestCase {
 
       val eventStatus = eventStatuses generateDifferentThan Processing
-      storeEvent(eventId, eventStatus, executionDate, committedDates.generateOne, eventBodies.generateOne, createdDate)
+      storeEvent(eventId,
+                 eventStatus,
+                 executionDate,
+                 committedDates.generateOne,
+                 serializedCommitEvents.generateOne,
+                 createdDate)
 
       val message          = eventMessages.generateOne
       val newExecutionDate = executionDates.generateOne
@@ -119,7 +128,12 @@ class EventLogMarkFailedSpec extends WordSpec with InMemoryEventLogDbSpec with M
     s"do nothing when setting $NonRecoverableFailure and event status is different than $Processing" in new TestCase {
 
       val eventStatus = eventStatuses generateDifferentThan Processing
-      storeEvent(eventId, eventStatus, executionDate, committedDates.generateOne, eventBodies.generateOne, createdDate)
+      storeEvent(eventId,
+                 eventStatus,
+                 executionDate,
+                 committedDates.generateOne,
+                 serializedCommitEvents.generateOne,
+                 createdDate)
 
       val message          = eventMessages.generateOne
       val newExecutionDate = executionDates.generateOne

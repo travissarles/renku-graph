@@ -71,12 +71,21 @@ private class EventsHistoryLoader[Interpretation[_]](
   }
 }
 
-private class IOEventsHistoryLoader(
-    transactor:              DbTransactor[IO, EventLogDB],
-    gitLabThrottler:         Throttler[IO, GitLab]
-)(implicit executionContext: ExecutionContext, contextShift: ContextShift[IO], clock: Clock[IO], timer: Timer[IO])
-    extends EventsHistoryLoader[IO](
-      new IOLatestCommitFinder(new GitLabConfigProvider[IO], gitLabThrottler, ApplicationLogger),
-      new IOCommitToEventLog(transactor, gitLabThrottler),
-      ApplicationLogger
-    )
+private object IOEventsHistoryLoader {
+
+  def apply(
+      transactor:              DbTransactor[IO, EventLogDB],
+      gitLabThrottler:         Throttler[IO, GitLab]
+  )(implicit executionContext: ExecutionContext,
+    contextShift:              ContextShift[IO],
+    clock:                     Clock[IO],
+    timer:                     Timer[IO]): IO[EventsHistoryLoader[IO]] =
+    for {
+      commitToEventLog <- IOCommitToEventLog(transactor, gitLabThrottler)
+    } yield
+      new EventsHistoryLoader(
+        new IOLatestCommitFinder(new GitLabConfigProvider[IO], gitLabThrottler, ApplicationLogger),
+        commitToEventLog,
+        ApplicationLogger
+      )
+}

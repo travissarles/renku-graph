@@ -16,23 +16,22 @@
  * limitations under the License.
  */
 
-package ch.datascience.triplesgenerator.eventprocessing
+package ch.datascience.webhookservice.eventprocessing.commitevent
 
+import cats.MonadError
+import cats.effect.IO
 import ch.datascience.graph.model.events.SerializedCommitEvent
+import ch.datascience.webhookservice.audit.{AuditLog, IOAuditLog}
 
 import scala.language.higherKinds
 
-class EventsSource[Interpretation[_]](
-    newRunner: EventProcessor[Interpretation] => Interpretation[EventProcessorRunner[Interpretation]]
-) {
-
-  def withEventsProcessor(
-      eventProcessor: EventProcessor[Interpretation]
-  ): Interpretation[EventProcessorRunner[Interpretation]] = newRunner(eventProcessor)
+private class AuditLogPush[Interpretation[_]] private[commitevent] (
+    auditLog:  AuditLog[Interpretation]
+)(implicit ME: MonadError[Interpretation, Throwable]) {
+  def pushToAuditLog(serializedEvent: SerializedCommitEvent): Interpretation[Unit] =
+    auditLog.push(serializedEvent)
 }
 
-abstract class EventProcessor[Interpretation[_]] extends (SerializedCommitEvent => Interpretation[Unit])
-
-abstract class EventProcessorRunner[Interpretation[_]](eventProcessor: EventProcessor[Interpretation]) {
-  def run: Interpretation[Unit]
+private object IOAuditLogPush {
+  def apply(): IO[AuditLogPush[IO]] = IOAuditLog() map (new AuditLogPush[IO](_))
 }

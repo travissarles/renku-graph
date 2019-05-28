@@ -16,23 +16,26 @@
  * limitations under the License.
  */
 
-package ch.datascience.triplesgenerator.eventprocessing
+package ch.datascience.graph.model.events
 
-import ch.datascience.graph.model.events.SerializedCommitEvent
+import ch.datascience.generators.Generators.jsons
+import ch.datascience.tinytypes.constraints.NonBlank
+import org.scalatest.Matchers._
+import org.scalatest.WordSpec
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 
-import scala.language.higherKinds
+class SerializedCommitEventSpec extends WordSpec with ScalaCheckPropertyChecks {
 
-class EventsSource[Interpretation[_]](
-    newRunner: EventProcessor[Interpretation] => Interpretation[EventProcessorRunner[Interpretation]]
-) {
+  "EventBody" should {
 
-  def withEventsProcessor(
-      eventProcessor: EventProcessor[Interpretation]
-  ): Interpretation[EventProcessorRunner[Interpretation]] = newRunner(eventProcessor)
-}
+    "have the NonBlank constraint" in {
+      SerializedCommitEvent shouldBe an[NonBlank]
+    }
 
-abstract class EventProcessor[Interpretation[_]] extends (SerializedCommitEvent => Interpretation[Unit])
-
-abstract class EventProcessorRunner[Interpretation[_]](eventProcessor: EventProcessor[Interpretation]) {
-  def run: Interpretation[Unit]
+    "be instantiatable from any non-blank string" in {
+      forAll(jsons) { body =>
+        SerializedCommitEvent.from(body.noSpaces).map(_.value) shouldBe Right(body.noSpaces)
+      }
+    }
+  }
 }

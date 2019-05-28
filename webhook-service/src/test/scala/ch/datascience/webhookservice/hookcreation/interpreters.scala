@@ -19,8 +19,13 @@
 package ch.datascience.webhookservice.hookcreation
 
 import cats.MonadError
-import ch.datascience.webhookservice.eventprocessing.startcommit.CommitToEventLog
+import cats.effect.{Concurrent, ContextShift, IO}
 import ch.datascience.webhookservice.commits.LatestCommitFinder
+import ch.datascience.webhookservice.crypto.HookTokenCrypto
+import ch.datascience.webhookservice.eventprocessing.startcommit.CommitToEventLog
+import ch.datascience.webhookservice.hookvalidation.HookValidator
+import ch.datascience.webhookservice.project.{ProjectHookUrlFinder, ProjectInfoFinder}
+import ch.datascience.webhookservice.tokenrepository.AccessTokenAssociator
 import io.chrisdavenport.log4cats.Logger
 
 import scala.util.Try
@@ -31,3 +36,28 @@ private class TryEventsHistoryLoader(
     logger:             Logger[Try]
 )(implicit ME:          MonadError[Try, Throwable])
     extends EventsHistoryLoader[Try](latestCommitFinder, commitToEventLog, logger)
+
+private class IOHookCreator(
+    projectHookUrlFinder:  ProjectHookUrlFinder[IO],
+    projectHookValidator:  HookValidator[IO],
+    projectInfoFinder:     ProjectInfoFinder[IO],
+    hookTokenCrypto:       HookTokenCrypto[IO],
+    projectHookCreator:    ProjectHookCreator[IO],
+    accessTokenAssociator: AccessTokenAssociator[IO],
+    eventsHistoryLoader:   EventsHistoryLoader[IO],
+    logger:                Logger[IO]
+)(implicit contextShift:   ContextShift[IO], concurrent: Concurrent[IO])
+    extends HookCreator[IO](projectHookUrlFinder,
+                            projectHookValidator,
+                            projectInfoFinder,
+                            hookTokenCrypto,
+                            projectHookCreator,
+                            accessTokenAssociator,
+                            eventsHistoryLoader,
+                            logger)
+
+private class IOEventsHistoryLoader(
+    latestCommitFinder: LatestCommitFinder[IO],
+    commitToEventLog:   CommitToEventLog[IO],
+    logger:             Logger[IO]
+) extends EventsHistoryLoader[IO](latestCommitFinder, commitToEventLog, logger)

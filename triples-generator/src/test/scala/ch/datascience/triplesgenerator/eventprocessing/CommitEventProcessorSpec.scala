@@ -23,7 +23,7 @@ import cats.data.NonEmptyList
 import cats.implicits._
 import ch.datascience.dbeventlog.DbEventLogGenerators._
 import ch.datascience.dbeventlog.EventStatus._
-import ch.datascience.dbeventlog.{EventBody, EventMessage}
+import ch.datascience.dbeventlog.EventMessage
 import ch.datascience.generators.CommonGraphGenerators._
 import ch.datascience.generators.Generators.Implicits._
 import ch.datascience.generators.Generators._
@@ -54,8 +54,8 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
 
       val commits = commitsLists().generateOne
       (eventsDeserialiser
-        .deserialiseToCommitEvents(_: EventBody))
-        .expects(eventBody)
+        .deserialiseToCommitEvents(_: SerializedCommitEvent))
+        .expects(serializedEvent)
         .returning(context.pure(commits))
 
       givenFetchingAccessToken(forProjectId = commits.head.project.id)
@@ -67,7 +67,7 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
 
       expectEventMarkedDone(commits.head.commitEventId)
 
-      eventProcessor(eventBody) shouldBe context.unit
+      eventProcessor(serializedEvent) shouldBe context.unit
 
       logSummary(commits, triples = commitsAndTriples.map(_._2).toList, uploaded = commitsAndTriples.size, failed = 0)
     }
@@ -79,8 +79,8 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
       val commit1 +: commit2 +: commit3 +: Nil = commits.toList
 
       (eventsDeserialiser
-        .deserialiseToCommitEvents(_: EventBody))
-        .expects(eventBody)
+        .deserialiseToCommitEvents(_: SerializedCommitEvent))
+        .expects(serializedEvent)
         .returning(context.pure(commits))
 
       givenFetchingAccessToken(forProjectId = commits.head.project.id)
@@ -98,7 +98,7 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
 
       expectEventMarkedFailed(commit2.commitEventId, NonRecoverableFailure, exception2)
 
-      eventProcessor(eventBody) shouldBe context.unit
+      eventProcessor(serializedEvent) shouldBe context.unit
 
       logError(commit2, exception2)
       logSummary(commits,
@@ -113,8 +113,8 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
       val commit +: Nil = commits.toList
 
       (eventsDeserialiser
-        .deserialiseToCommitEvents(_: EventBody))
-        .expects(eventBody)
+        .deserialiseToCommitEvents(_: SerializedCommitEvent))
+        .expects(serializedEvent)
         .returning(context.pure(commits))
 
       givenFetchingAccessToken(forProjectId = commits.head.project.id)
@@ -128,7 +128,7 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
 
       expectEventMarkedFailed(commit.commitEventId, NonRecoverableFailure, exception)
 
-      eventProcessor(eventBody) shouldBe context.unit
+      eventProcessor(serializedEvent) shouldBe context.unit
 
       logError(commits.head, exception)
       logSummary(commits, triples = List.empty, uploaded = 0, failed = 1)
@@ -141,8 +141,8 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
       val commit1 +: commit2 +: Nil = commits.toList
 
       (eventsDeserialiser
-        .deserialiseToCommitEvents(_: EventBody))
-        .expects(eventBody)
+        .deserialiseToCommitEvents(_: SerializedCommitEvent))
+        .expects(serializedEvent)
         .returning(context.pure(commits))
 
       givenFetchingAccessToken(forProjectId = commits.head.project.id)
@@ -168,7 +168,7 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
 
       expectEventMarkedFailed(commit1.commitEventId, TriplesStoreFailure, exception1)
 
-      eventProcessor(eventBody) shouldBe context.unit
+      eventProcessor(serializedEvent) shouldBe context.unit
 
       logError(commits.head, exception1)
       logSummary(commits, triples = List.empty, uploaded = 0, failed = 2)
@@ -180,8 +180,8 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
       val commit +: Nil = commits.toList
 
       (eventsDeserialiser
-        .deserialiseToCommitEvents(_: EventBody))
-        .expects(eventBody)
+        .deserialiseToCommitEvents(_: SerializedCommitEvent))
+        .expects(serializedEvent)
         .returning(context.pure(commits))
 
       givenFetchingAccessToken(forProjectId = commits.head.project.id)
@@ -204,7 +204,7 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
         .expects(commit.commitEventId)
         .returning(context.raiseError(exception))
 
-      eventProcessor(eventBody) shouldBe context.unit
+      eventProcessor(serializedEvent) shouldBe context.unit
 
       logError(commits.head, exception, s"failed to mark as $TriplesStore in the Event Log")
       logSummary(commits, triples = List(triples), uploaded = 1, failed = 0)
@@ -214,21 +214,21 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
 
       val exception = exceptions.generateOne
       (eventsDeserialiser
-        .deserialiseToCommitEvents(_: EventBody))
-        .expects(eventBody)
+        .deserialiseToCommitEvents(_: SerializedCommitEvent))
+        .expects(serializedEvent)
         .returning(context.raiseError(exception))
 
-      eventProcessor(eventBody) shouldBe context.unit
+      eventProcessor(serializedEvent) shouldBe context.unit
 
-      logger.loggedOnly(Error(s"Commit Event processing failure: $eventBody", exception))
+      logger.loggedOnly(Error(s"Commit Event processing failure: $serializedEvent", exception))
     }
 
     s"mark event as $New and log an error if finding an access token fails" in new TestCase {
 
       val commits = commitsLists(size = Gen.const(1)).generateOne
       (eventsDeserialiser
-        .deserialiseToCommitEvents(_: EventBody))
-        .expects(eventBody)
+        .deserialiseToCommitEvents(_: SerializedCommitEvent))
+        .expects(serializedEvent)
         .returning(context.pure(commits))
 
       val exception = exceptions.generateOne
@@ -240,11 +240,11 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
         .expects(commits.head.commitEventId)
         .returning(context.unit)
 
-      eventProcessor(eventBody) shouldBe context.unit
+      eventProcessor(serializedEvent) shouldBe context.unit
 
       logger.loggedOnly(
         Error(
-          message          = s"Commit Event processing failure: $eventBody",
+          message          = s"Commit Event processing failure: $serializedEvent",
           throwableMatcher = NotRefEqual(new Exception("processing failure -> Event rolled back", exception))
         )
       )
@@ -254,7 +254,7 @@ class CommitEventProcessorSpec extends WordSpec with MockFactory {
   private trait TestCase {
     val context = MonadError[Try, Throwable]
 
-    val eventBody        = eventBodies.generateOne
+    val serializedEvent  = serializedCommitEvents.generateOne
     val elapsedTime      = elapsedTimes.generateOne
     val maybeAccessToken = Gen.option(accessTokens).generateOne
 

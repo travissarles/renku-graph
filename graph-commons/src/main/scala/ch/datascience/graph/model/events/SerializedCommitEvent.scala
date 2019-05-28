@@ -16,23 +16,13 @@
  * limitations under the License.
  */
 
-package ch.datascience.triplesgenerator.eventprocessing
+package ch.datascience.graph.model.events
 
-import ch.datascience.graph.model.events.SerializedCommitEvent
+import ch.datascience.tinytypes.constraints.NonBlank
+import ch.datascience.tinytypes.{TinyType, TinyTypeFactory}
 
-import scala.language.higherKinds
+final class SerializedCommitEvent private (val value: String) extends AnyVal with TinyType[String]
 
-class EventsSource[Interpretation[_]](
-    newRunner: EventProcessor[Interpretation] => Interpretation[EventProcessorRunner[Interpretation]]
-) {
-
-  def withEventsProcessor(
-      eventProcessor: EventProcessor[Interpretation]
-  ): Interpretation[EventProcessorRunner[Interpretation]] = newRunner(eventProcessor)
-}
-
-abstract class EventProcessor[Interpretation[_]] extends (SerializedCommitEvent => Interpretation[Unit])
-
-abstract class EventProcessorRunner[Interpretation[_]](eventProcessor: EventProcessor[Interpretation]) {
-  def run: Interpretation[Unit]
-}
+object SerializedCommitEvent
+    extends TinyTypeFactory[String, SerializedCommitEvent](new SerializedCommitEvent(_))
+    with NonBlank

@@ -50,15 +50,15 @@ trait InMemoryEventLogDbSpec extends DbSpec with InMemoryEventLogDb {
     sql"TRUNCATE TABLE event_log".update.run
   }
 
-  protected def storeEvent(commitEventId: CommitEventId,
-                           eventStatus:   EventStatus,
-                           executionDate: ExecutionDate,
-                           eventDate:     CommittedDate,
-                           eventBody:     EventBody,
-                           createdDate:   CreatedDate = CreatedDate(Instant.now)): Unit = execute {
+  protected def storeEvent(commitEventId:   CommitEventId,
+                           eventStatus:     EventStatus,
+                           executionDate:   ExecutionDate,
+                           eventDate:       CommittedDate,
+                           serializedEvent: SerializedCommitEvent,
+                           createdDate:     CreatedDate = CreatedDate(Instant.now)): Unit = execute {
     sql"""insert into 
          |event_log (event_id, project_id, status, created_date, execution_date, event_date, event_body) 
-         |values (${commitEventId.id}, ${commitEventId.projectId}, $eventStatus, $createdDate, $executionDate, $eventDate, $eventBody)
+         |values (${commitEventId.id}, ${commitEventId.projectId}, $eventStatus, $createdDate, $executionDate, $eventDate, $serializedEvent)
       """.stripMargin.update.run
       .map(_ => ())
   }
