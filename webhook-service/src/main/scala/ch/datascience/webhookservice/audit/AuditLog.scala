@@ -18,42 +18,70 @@
 
 package ch.datascience.webhookservice.audit
 
-import java.util
+import java.io.FileNotFoundException
+import java.time.Instant
 
 import cats.data.OptionT
 import cats.effect.IO
 import ch.datascience.graph.model.events.SerializedCommitEvent
 import ch.datascience.logging.ApplicationLogger
+import ch.datascience.webhookservice.audit.AuditLogConfig.ServersFilename
 import ch.epfl.dedis.byzcoin.SignerCounters
 import ch.epfl.dedis.eventlog.EventLogInstance
 import ch.epfl.dedis.lib.darc.Signer
+import ch.epfl.dedis.lib.network.ServerToml
+import com.moandjiezana.toml.Toml
 import io.chrisdavenport.log4cats.Logger
 
+import scala.collection.JavaConverters._
 import scala.language.higherKinds
 
 trait AuditLog[Interpretation[_]] {
   def push(serializedEvent: SerializedCommitEvent): Interpretation[Unit]
+  def fetchAllEvents: Interpretation[List[SerializedCommitEvent]]
 }
 
 object AuditLogPassThrough extends AuditLog[IO] {
   override def push(serializedEvent: SerializedCommitEvent): IO[Unit] = IO.unit
+  override def fetchAllEvents: IO[List[SerializedCommitEvent]] = IO.pure(List.empty)
 }
 
 class IOAuditLog private (config:         AuditLogConfig,
                           eventLog:       EventLogInstance,
-                          signers:        util.List[Signer],
+                          user:           Signer,
                           signerCounters: SignerCounters)
     extends AuditLog[IO] {
+
+  import cats.implicits._
+  import config._
+
+  import scala.collection.JavaConverters._
+
+  private lazy val Epoch: Long = Instant.EPOCH.toNanos
+  private[this] val signers = List(user).asJava
+
   override def push(serializedEvent: SerializedCommitEvent): IO[Unit] = IO {
     import ch.epfl.dedis.eventlog.Event
 
-    val event = new Event(config.topic.value, serializedEvent.value)
-    val incrementedSignerCounters = {
-      signerCounters.increment()
-      signerCounters.getCounters
-    }
+    signerCounters.increment()
 
-    eventLog.log(event, signers, incrementedSignerCounters)
+    val event = new Event(topic.value, serializedEvent.value)
+
+    eventLog.log(event, signers, signerCounters.getCounters)
+  }
+
+  override def fetchAllEvents: IO[List[SerializedCommitEvent]] =
+    for {
+      auditEvents <- IO(eventLog.search(topic.value, Epoch, Instant.now().toNanos).events.asScala.toList)
+      serializedCommitEvents <- auditEvents
+                                 .map(_.getContent)
+                                 .map(SerializedCommitEvent.from)
+                                 .map(IO.fromEither)
+                                 .sequence
+    } yield serializedCommitEvents
+
+  private implicit class InstantOps(instant: Instant) {
+    lazy val toNanos: Long = instant.toEpochMilli * 1000 * 1000
   }
 }
 
@@ -63,10 +91,11 @@ object IOAuditLog {
 
   import ch.epfl.dedis.byzcoin.ByzCoinRPC
   import ch.epfl.dedis.eventlog.EventLogInstance
+  import ch.epfl.dedis.eventlog.EventLogInstance._
   import ch.epfl.dedis.lib.darc._
   import ch.epfl.dedis.lib.network.{Roster, ServerIdentity}
 
-  import scala.collection.JavaConverters._
+  import scala.io.Source
 
   def apply(maybeConfig: OptionT[IO, AuditLogConfig] = AuditLogConfig.get(),
             logger:      Logger[IO]                  = ApplicationLogger): IO[AuditLog[IO]] =
@@ -77,29 +106,44 @@ object IOAuditLog {
         AuditLogPassThrough
       }
 
-  private def instantiateAuditLog(config: AuditLogConfig) = IO {
-    val admin: Signer = new SignerEd25519
-    val roster = {
-      val identities = List.empty[ServerIdentity]
-      val conodes    = identities.take(4)
-      new Roster(conodes.asJava)
-    }
-    val genesisDarc: Darc = {
-      val darc = ByzCoinRPC.makeGenesisDarc(admin, roster)
-      darc.addIdentity("spawn:eventlog", admin.getIdentity, Rules.OR)
-      darc.addIdentity("invoke:" + EventLogInstance.ContractId + "." + EventLogInstance.LogCmd,
-                       admin.getIdentity,
-                       Rules.OR)
-      darc
-    }
-    val byzcoin        = new ByzCoinRPC(roster, genesisDarc, Duration.of(1000, MILLIS))
-    val signerCounters = byzcoin.getSignerCounters(List(admin.getIdentity.toString).asJava)
-    val signers        = List(admin).asJava
-    val eventLog = new EventLogInstance(byzcoin,
-                                        genesisDarc.getId,
-                                        signers,
-                                        List(new java.lang.Long(signerCounters.head + 1)).asJava)
+  private def instantiateAuditLog(config: AuditLogConfig) =
+    for {
+      roster         <- readServerIdentities(config.serversFilename).map(_.take(4)).map(_.asJava).map(new Roster(_))
+      admin          <- IO(new SignerEd25519)
+      user           <- IO(new SignerEd25519)
+      genesisDarc    <- createGenesisDarc(admin, user, roster)
+      byzcoin        <- IO(new ByzCoinRPC(roster, genesisDarc, Duration.of(1000, MILLIS)))
+      signerCounters <- IO(byzcoin.getSignerCounters(List(user.getIdentity.toString).asJava))
+      eventLog       <- createEventLog(byzcoin, genesisDarc, user, signerCounters)
+    } yield new IOAuditLog(config, eventLog, user, signerCounters)
 
-    new IOAuditLog(config, eventLog, signers, signerCounters)
+  private def createEventLog(byzcoin: ByzCoinRPC, genesisDarc: Darc, user: Signer, signerCounters: SignerCounters) =
+    IO {
+      signerCounters.increment()
+      new EventLogInstance(byzcoin, genesisDarc.getId, List(user).asJava, signerCounters.getCounters)
+    }
+
+  private def createGenesisDarc(admin: Signer, user: Signer, roster: Roster): IO[Darc] = IO {
+    val darc = ByzCoinRPC.makeGenesisDarc(admin, roster)
+    darc.addIdentity(s"spawn:$ContractId", user.getIdentity, Rules.OR)
+    darc.addIdentity(s"invoke:$ContractId.$LogCmd", user.getIdentity, Rules.OR)
+    darc
   }
+
+  private def readServerIdentities(serversFilename: ServersFilename): IO[List[ServerIdentity]] =
+    Option(Source.fromResource(serversFilename.value).reader())
+      .map { fileInputStream =>
+        IO {
+          new Toml()
+            .read(fileInputStream)
+            .getTables("servers")
+            .asScala
+            .toList
+            .map(_.to(classOf[ServerToml]))
+            .map(new ServerIdentity(_))
+        }
+      }
+      .getOrElse {
+        IO.raiseError(new FileNotFoundException(s"'$serversFilename' Audit Log configuration file cannot be found"))
+      }
 }

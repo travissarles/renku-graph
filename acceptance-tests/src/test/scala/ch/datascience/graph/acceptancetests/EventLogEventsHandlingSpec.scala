@@ -23,7 +23,7 @@ import ch.datascience.generators.Generators.Implicits._
 import ch.datascience.graph.acceptancetests.db.EventLog
 import ch.datascience.graph.acceptancetests.stubs.GitLab._
 import ch.datascience.graph.acceptancetests.stubs.RemoteTriplesGenerator._
-import ch.datascience.graph.acceptancetests.tooling.{GraphServices, RDFStore}
+import ch.datascience.graph.acceptancetests.tooling.{AuditLog, GraphServices, RDFStore}
 import ch.datascience.graph.model.events.EventsGenerators.{commitIds, projects}
 import ch.datascience.webhookservice.model.HookToken
 import org.http4s.Status._
@@ -38,7 +38,7 @@ class EventLogEventsHandlingSpec
     with Eventually
     with IntegrationPatience {
 
-  feature("Commit Events from the Event Log get translated to triples in the RDF Store") {
+  feature("Commit Events from the Event Log get translated into triples and stored in the RDF Store") {
 
     scenario("Not processed Commit Events in the Event Log should be picked-up for processing") {
 
@@ -65,7 +65,12 @@ class EventLogEventsHandlingSpec
       When("the Event is picked up by the Triples Generator")
       Then("RDF triples got generated and pushed to the RDF Store")
       eventually {
-        RDFStore.findAllTriplesNumber() should be > 0
+        RDFStore.findAllTriplesNumber should be > 0
+      }
+
+      And("to the Audit Log")
+      eventually {
+        AuditLog.fetchAllEvents shouldBe List(commitId)
       }
 
       And(s"the relevant Event got marked as $TriplesStore in the Log")

@@ -21,7 +21,7 @@ package ch.datascience.webhookservice.audit
 import cats.MonadError
 import cats.data.OptionT
 import cats.implicits._
-import ch.datascience.webhookservice.audit.AuditLogConfig.Topic
+import ch.datascience.webhookservice.audit.AuditLogConfig._
 import com.typesafe.config.{Config, ConfigFactory}
 import eu.timepit.refined.W
 import eu.timepit.refined.api.Refined
@@ -29,21 +29,30 @@ import eu.timepit.refined.string.MatchesRegex
 
 import scala.language.higherKinds
 
-case class AuditLogConfig(topic: Topic)
+case class AuditLogConfig(topic: Topic, serversFilename: ServersFilename)
 
 object AuditLogConfig {
 
   import ch.datascience.config.ConfigLoader._
   import eu.timepit.refined.pureconfig._
 
-  type Topic = String Refined MatchesRegex[W.`"""^(?!\\s*$).+"""`.T]
+  type Topic           = String Refined MatchesRegex[W.`"""^(?!\\s*$).+"""`.T]
+  type ServersFilename = String Refined MatchesRegex[W.`"""^(?!\\s*$).+"""`.T]
 
   def get[Interpretation[_]](
       config:    Config = ConfigFactory.load()
   )(implicit ME: MonadError[Interpretation, Throwable]): OptionT[Interpretation, AuditLogConfig] = OptionT {
     find[Interpretation, Boolean]("audit-log.enabled", config) flatMap {
-      case true  => find[Interpretation, Topic]("audit-log.topic", config) map AuditLogConfig.apply map Option.apply
       case false => ME.pure(Option.empty[AuditLogConfig])
+      case true  => readConfigValues[Interpretation](config)
     }
   }
+
+  private def readConfigValues[Interpretation[_]](
+      config:    Config
+  )(implicit ME: MonadError[Interpretation, Throwable]) =
+    for {
+      topic           <- find[Interpretation, Topic]("audit-log.topic", config)
+      serversFilename <- find[Interpretation, ServersFilename]("audit-log.servers-filename", config)
+    } yield Option(AuditLogConfig(topic, serversFilename))
 }

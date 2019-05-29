@@ -49,7 +49,7 @@ object RdfStoreProvisioning extends Eventually with IntegrationPatience {
     }
 
     eventually {
-      RDFStore.findAllTriplesNumber() should be > 0
+      RDFStore.findAllTriplesNumber should be > 0
     }
   }
 }

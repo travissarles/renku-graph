@@ -38,7 +38,7 @@ class JenaReProvisioningSpec extends FeatureSpec with GivenWhenThen with GraphSe
 
       Given("some data in the RDF Store")
       `data in the RDF store`(project, commitId)
-      val initialTriplesNumber = RDFStore.findAllTriplesNumber()
+      val initialTriplesNumber = RDFStore.findAllTriplesNumber
 
       When("user does DELETE triples-generator/triples/projects")
       triplesGeneratorClient
@@ -47,12 +47,12 @@ class JenaReProvisioningSpec extends FeatureSpec with GivenWhenThen with GraphSe
 
       Then("all the triples should be deleted")
       eventually {
-        RDFStore.findAllTriplesNumber() shouldBe 0
+        RDFStore.findAllTriplesNumber shouldBe 0
       }
 
       And("then all the RDF Store gets re-provisioned with the events from the Log")
       eventually {
-        RDFStore.findAllTriplesNumber() shouldBe initialTriplesNumber
+        RDFStore.findAllTriplesNumber shouldBe initialTriplesNumber
       }
     }
 

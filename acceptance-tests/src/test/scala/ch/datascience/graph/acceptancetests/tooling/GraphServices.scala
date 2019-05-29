@@ -51,8 +51,12 @@ trait GraphServices extends BeforeAndAfterAll with ExternalServiceStubbing {
 
     GraphServices.servicesRunner
       .run(
-        ServiceRun(webhookservice.Microservice, webhookServiceClient),
         ServiceRun(tokenrepository.Microservice, tokenRepositoryClient),
+        ServiceRun(
+          service         = webhookservice.Microservice,
+          serviceClient   = webhookServiceClient,
+          preServiceStart = List(AuditLog.start())
+        ),
         ServiceRun(
           service       = triplesgenerator.Microservice,
           serviceClient = GraphServices.triplesGeneratorClient,

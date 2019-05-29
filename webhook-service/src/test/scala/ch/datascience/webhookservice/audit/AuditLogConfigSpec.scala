@@ -34,20 +34,23 @@ class AuditLogConfigSpec extends WordSpec {
 
     "return an instance of the config if 'audit-log.enabled' is true " +
       "and there are all required entries" in {
-      val topic = nonEmptyStrings().generateOne
+      val topic           = nonEmptyStrings().generateOne
+      val serversFilename = nonEmptyStrings().generateOne
 
       val config = ConfigFactory.parseMap(
         Map(
           "audit-log" -> Map(
-            "enabled" -> "true",
-            "topic"   -> topic
+            "enabled"          -> "true",
+            "topic"            -> topic,
+            "servers-filename" -> serversFilename
           ).asJava
         ).asJava
       )
 
       val Success(Some(auditLogConfig)) = AuditLogConfig.get[Try](config).value
 
-      auditLogConfig.topic.value shouldBe topic
+      auditLogConfig.topic.value           shouldBe topic
+      auditLogConfig.serversFilename.value shouldBe serversFilename
     }
 
     "return None if 'audit-log.enabled' is false" in {
@@ -73,6 +76,19 @@ class AuditLogConfigSpec extends WordSpec {
         Map(
           "audit-log" -> Map(
             "enabled" -> "true"
+          ).asJava
+        ).asJava
+      )
+
+      AuditLogConfig.get[Try](config).value shouldBe a[Failure[_]]
+    }
+
+    "fail if 'audit-log.enabled' is true but no 'servers-filename'" in {
+      val config = ConfigFactory.parseMap(
+        Map(
+          "audit-log" -> Map(
+            "enabled" -> "true",
+            "topic"   -> nonEmptyStrings().generateOne
           ).asJava
         ).asJava
       )

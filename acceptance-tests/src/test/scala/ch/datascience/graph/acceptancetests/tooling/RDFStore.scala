@@ -40,7 +40,7 @@ object RDFStore {
 
   def stop(): Unit = rdfStoreServer.stop()
 
-  def findAllTriplesNumber(): Int =
+  def findAllTriplesNumber: Int =
     connnection
       .query(
         "SELECT (COUNT(*) as ?Triples) WHERE { ?s ?p ?o}"

@@ -20,4 +20,5 @@ name := "acceptance-tests"
 
 parallelExecution in Test := false
 
-libraryDependencies += "org.apache.jena" % "jena-fuseki-main" % "3.11.0" % Test
+libraryDependencies += "org.apache.jena"    % "jena-fuseki-main" % "3.11.0" % Test
+libraryDependencies += "org.testcontainers" % "testcontainers"   % "1.11.3" % Test
