@@ -135,6 +135,10 @@ A valid `X-Gitlab-Token` is required.
 | UNAUTHORIZED (401)         | When there is no `X-Gitlab-Token` in the header or it's invalid |
 | INTERNAL SERVER ERROR (500)| When queue is not accepting new events                          |
 
+## Generating Audit Log admin and user secrets
+
+To generate Audit Log user secret use a following command: `sbt "project webhook-service" "runMain ch.datascience.webhookservice.audit.AuditSignerGenerator"`.
+
 ## Trying out
 
 The webhook-service is a part of multi-module sbt project thus it has to be built from the root level.
