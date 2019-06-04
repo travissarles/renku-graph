@@ -25,8 +25,9 @@ import cats.effect.IO
 import ch.datascience.graph.model.events.SerializedCommitEvent
 import ch.datascience.logging.ApplicationLogger
 import ch.datascience.webhookservice.audit.AuditLogConfig.ServersConfigFile
-import ch.epfl.dedis.byzcoin.SignerCounters
-import ch.epfl.dedis.eventlog.EventLogInstance
+import ch.datascience.webhookservice.audit.IOAuditLog.EventLog
+import ch.epfl.dedis.byzcoin.{InstanceId, SignerCounters}
+import ch.epfl.dedis.eventlog.{Event, SearchResponse}
 import ch.epfl.dedis.lib.darc.Signer
 import ch.epfl.dedis.lib.network.ServerToml
 import com.moandjiezana.toml.Toml
@@ -45,19 +46,18 @@ object AuditLogPassThrough extends AuditLog[IO] {
   override def fetchAllEvents: IO[List[SerializedCommitEvent]] = IO.pure(List.empty)
 }
 
-class IOAuditLog private (config:         AuditLogConfig,
-                          eventLog:       EventLogInstance,
-                          user:           Signer,
-                          signerCounters: SignerCounters)
+class IOAuditLog private[audit] (config:         AuditLogConfig,
+                                 eventLog:       EventLog,
+                                 signer:         Signer,
+                                 signerCounters: SignerCounters,
+                                 now:            () => Instant = () => Instant.now())
     extends AuditLog[IO] {
 
   import cats.implicits._
   import config._
 
-  import scala.collection.JavaConverters._
-
   private lazy val Epoch: Long = Instant.EPOCH.toNanos
-  private[this] val signers = List(user).asJava
+  private[this] val signers = List(signer).asJava
 
   override def push(serializedEvent: SerializedCommitEvent): IO[Unit] = IO {
     import ch.epfl.dedis.eventlog.Event
@@ -71,7 +71,7 @@ class IOAuditLog private (config:         AuditLogConfig,
 
   override def fetchAllEvents: IO[List[SerializedCommitEvent]] =
     for {
-      auditEvents <- IO(eventLog.search(topic.value, Epoch, Instant.now().toNanos).events.asScala.toList)
+      auditEvents <- IO(eventLog.search(topic.value, Epoch, now().toNanos).events.asScala.toList)
       serializedCommitEvents <- auditEvents
                                  .map(_.getContent)
                                  .map(SerializedCommitEvent.from)
@@ -95,6 +95,13 @@ object IOAuditLog {
   import ch.epfl.dedis.lib.darc._
   import ch.epfl.dedis.lib.network.{Roster, ServerIdentity}
 
+  private[audit] class EventLog(instance: EventLogInstance) {
+    def log(event: Event, signers: java.util.List[Signer], signerCtrs: java.util.List[java.lang.Long]): InstanceId =
+      instance.log(event, signers, signerCtrs)
+    def search(topic: String, from: Long, to: Long): SearchResponse =
+      instance.search(topic, from, to)
+  }
+
   def apply(maybeConfig: OptionT[IO, AuditLogConfig] = AuditLogConfig.get(),
             logger:      Logger[IO]                  = ApplicationLogger): IO[AuditLog[IO]] =
     maybeConfig
@@ -106,7 +113,7 @@ object IOAuditLog {
 
   private def instantiateAuditLog(config: AuditLogConfig) =
     for {
-      roster         <- readServerIdentities(config.serversConfigFile).map(_.take(4)).map(_.asJava).map(new Roster(_))
+      roster         <- readServerIdentities(config.serversConfigFile) map (_.take(4)) map (_.asJava) map (new Roster(_))
       genesisDarc    <- createGenesisDarc(config.signers, roster)
       byzcoin        <- IO(new ByzCoinRPC(roster, genesisDarc, Duration.of(1000, MILLIS)))
       signerCounters <- IO(byzcoin.getSignerCounters(List(config.signers.user.value.getIdentity.toString).asJava))
@@ -116,7 +123,9 @@ object IOAuditLog {
   private def createEventLog(byzcoin: ByzCoinRPC, genesisDarc: Darc, user: Signer, signerCounters: SignerCounters) =
     IO {
       signerCounters.increment()
-      new EventLogInstance(byzcoin, genesisDarc.getId, List(user).asJava, signerCounters.getCounters)
+      new EventLog(
+        new EventLogInstance(byzcoin, genesisDarc.getId, List(user).asJava, signerCounters.getCounters)
+      )
     }
 
   private def createGenesisDarc(signers: AuditLogSigners, roster: Roster): IO[Darc] = IO {

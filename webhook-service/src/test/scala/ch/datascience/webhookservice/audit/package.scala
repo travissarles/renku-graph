@@ -18,8 +18,12 @@
 
 package ch.datascience.webhookservice
 
-import ch.datascience.webhookservice.audit.AuditLogConfig.{AdminSigner, UserSigner}
+import java.nio.file.Paths
+
+import ch.datascience.generators.Generators._
+import ch.datascience.webhookservice.audit.AuditLogConfig._
 import ch.epfl.dedis.lib.darc.{Signer, SignerEd25519}
+import eu.timepit.refined.api.RefType
 import org.scalacheck.Gen
 
 package object audit {
@@ -32,4 +36,14 @@ package object audit {
     adminSecret <- adminSecrets
     userSecret  <- userSecrets
   } yield AuditLogSigners.apply(adminSecret, userSecret)
+
+  implicit val auditLogConfigs: Gen[AuditLogConfig] = for {
+    topic            <- nonEmptyStrings() map (RefType.applyRef[Topic](_).getOrError)
+    serverConfigFile <- relativePaths() map (path => Paths.get(path)) map ServersConfigFile.apply
+    secrets          <- auditLogSecrets
+  } yield AuditLogConfig(topic, serverConfigFile, secrets)
+
+  private implicit class RefinedOps[V](maybeValue: Either[String, V]) {
+    lazy val getOrError: V = maybeValue.fold(s => throw new IllegalArgumentException(s), identity)
+  }
 }
