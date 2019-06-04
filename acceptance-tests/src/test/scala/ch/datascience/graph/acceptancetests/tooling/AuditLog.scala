@@ -33,14 +33,14 @@ object AuditLog {
   import java.util.function.Consumer
 
   import org.testcontainers.containers.GenericContainer
-  import org.testcontainers.containers.wait.strategy.Wait
+  import org.testcontainers.containers.wait.strategy.Wait.forListeningPort
   import org.testcontainers.images.builder.ImageFromDockerfile
   import org.testcontainers.images.builder.dockerfile.DockerfileBuilder
 
   import scala.collection.JavaConverters._
   import scala.util.control.NonFatal
 
-  private val ServerImageName          = "dedis/conode-test:latest"
+  private val ServerImageName          = "renku/conode-test:latest"
   private val TemporaryDockerImageName = "conode-test-run"
 
   private val ServerExposedPorts    = (7770 to 7783).toList
@@ -55,7 +55,7 @@ object AuditLog {
       val container   = new GenericContainer(dockerImage)
       container.setPortBindings(PortBindings.asJava)
       container.withExposedPorts(ContainerExposedPorts.map(new java.lang.Integer(_)): _*)
-      container.waitingFor(Wait.forListeningPort)
+      container.waitingFor(forListeningPort)
       container.start()
     } recoverWith meaningfulException
 

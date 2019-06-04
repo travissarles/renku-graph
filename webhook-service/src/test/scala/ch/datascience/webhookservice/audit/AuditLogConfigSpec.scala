@@ -18,9 +18,13 @@
 
 package ch.datascience.webhookservice.audit
 
+import java.util.Base64
+
 import cats.implicits._
 import ch.datascience.generators.Generators.Implicits._
 import ch.datascience.generators.Generators._
+import ch.datascience.tinytypes.TinyType
+import ch.epfl.dedis.lib.darc.Signer
 import com.typesafe.config.ConfigFactory
 import org.scalatest.Matchers._
 import org.scalatest.WordSpec
@@ -36,21 +40,28 @@ class AuditLogConfigSpec extends WordSpec {
       "and there are all required entries" in {
       val topic           = nonEmptyStrings().generateOne
       val serversFilename = nonEmptyStrings().generateOne
+      val secrets         = auditLogSecrets.generateOne
 
       val config = ConfigFactory.parseMap(
         Map(
           "audit-log" -> Map(
             "enabled"          -> "true",
             "topic"            -> topic,
-            "servers-filename" -> serversFilename
+            "servers-filename" -> serversFilename,
+            "secrets" -> Map(
+              "admin" -> secrets.admin.toConfigValue,
+              "user"  -> secrets.user.toConfigValue
+            ).asJava
           ).asJava
         ).asJava
       )
 
       val Success(Some(auditLogConfig)) = AuditLogConfig.get[Try](config).value
 
-      auditLogConfig.topic.value           shouldBe topic
-      auditLogConfig.serversFilename.value shouldBe serversFilename
+      auditLogConfig.topic.value                     shouldBe topic
+      auditLogConfig.serversFilename.value           shouldBe serversFilename
+      auditLogConfig.signers.admin.value.serialize() shouldBe secrets.admin.value.serialize()
+      auditLogConfig.signers.user.value.serialize()  shouldBe secrets.user.value.serialize()
     }
 
     "return None if 'audit-log.enabled' is false" in {
@@ -75,7 +86,12 @@ class AuditLogConfigSpec extends WordSpec {
       val config = ConfigFactory.parseMap(
         Map(
           "audit-log" -> Map(
-            "enabled" -> "true"
+            "enabled"          -> "true",
+            "servers-filename" -> nonEmptyStrings().generateOne,
+            "secrets" -> Map(
+              "admin" -> adminSecrets.generateOne.toConfigValue,
+              "user"  -> userSecrets.generateOne.toConfigValue
+            ).asJava
           ).asJava
         ).asJava
       )
@@ -88,12 +104,57 @@ class AuditLogConfigSpec extends WordSpec {
         Map(
           "audit-log" -> Map(
             "enabled" -> "true",
-            "topic"   -> nonEmptyStrings().generateOne
+            "topic"   -> nonEmptyStrings().generateOne,
+            "secrets" -> Map(
+              "admin" -> adminSecrets.generateOne.toConfigValue,
+              "user"  -> userSecrets.generateOne.toConfigValue
+            ).asJava
           ).asJava
         ).asJava
       )
 
       AuditLogConfig.get[Try](config).value shouldBe a[Failure[_]]
     }
+
+    "fail if 'audit-log.enabled' is true but no 'secret.admin'" in {
+      val config = ConfigFactory.parseMap(
+        Map(
+          "audit-log" -> Map(
+            "enabled"          -> "true",
+            "topic"            -> nonEmptyStrings().generateOne,
+            "servers-filename" -> nonEmptyStrings().generateOne,
+            "secrets" -> Map(
+              "user" -> userSecrets.generateOne.toConfigValue
+            ).asJava
+          ).asJava
+        ).asJava
+      )
+
+      AuditLogConfig.get[Try](config).value shouldBe a[Failure[_]]
+    }
+
+    "fail if 'audit-log.enabled' is true but no 'secret.user'" in {
+      val config = ConfigFactory.parseMap(
+        Map(
+          "audit-log" -> Map(
+            "enabled"          -> "true",
+            "topic"            -> nonEmptyStrings().generateOne,
+            "servers-filename" -> nonEmptyStrings().generateOne,
+            "secrets" -> Map(
+              "admin" -> adminSecrets.generateOne.toConfigValue,
+            ).asJava
+          ).asJava
+        ).asJava
+      )
+
+      AuditLogConfig.get[Try](config).value shouldBe a[Failure[_]]
+    }
+  }
+
+  private implicit class SecretOps(secret: TinyType[Signer]) {
+    private lazy val base64Encoder = Base64.getEncoder
+    private lazy val charset       = "utf-8"
+
+    lazy val toConfigValue: String = new String(base64Encoder.encode(secret.value.serialize()), charset)
   }
 }

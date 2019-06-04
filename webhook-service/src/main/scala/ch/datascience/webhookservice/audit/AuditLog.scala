@@ -18,7 +18,6 @@
 
 package ch.datascience.webhookservice.audit
 
-import java.io.FileNotFoundException
 import java.time.Instant
 
 import cats.data.OptionT
@@ -95,7 +94,7 @@ object IOAuditLog {
   import ch.epfl.dedis.lib.darc._
   import ch.epfl.dedis.lib.network.{Roster, ServerIdentity}
 
-  import scala.io.Source
+  import scala.io.Source.fromResource
 
   def apply(maybeConfig: OptionT[IO, AuditLogConfig] = AuditLogConfig.get(),
             logger:      Logger[IO]                  = ApplicationLogger): IO[AuditLog[IO]] =
@@ -109,13 +108,11 @@ object IOAuditLog {
   private def instantiateAuditLog(config: AuditLogConfig) =
     for {
       roster         <- readServerIdentities(config.serversFilename).map(_.take(4)).map(_.asJava).map(new Roster(_))
-      admin          <- IO(new SignerEd25519)
-      user           <- IO(new SignerEd25519)
-      genesisDarc    <- createGenesisDarc(admin, user, roster)
+      genesisDarc    <- createGenesisDarc(config.signers, roster)
       byzcoin        <- IO(new ByzCoinRPC(roster, genesisDarc, Duration.of(1000, MILLIS)))
-      signerCounters <- IO(byzcoin.getSignerCounters(List(user.getIdentity.toString).asJava))
-      eventLog       <- createEventLog(byzcoin, genesisDarc, user, signerCounters)
-    } yield new IOAuditLog(config, eventLog, user, signerCounters)
+      signerCounters <- IO(byzcoin.getSignerCounters(List(config.signers.user.value.getIdentity.toString).asJava))
+      eventLog       <- createEventLog(byzcoin, genesisDarc, config.signers.user.value, signerCounters)
+    } yield new IOAuditLog(config, eventLog, config.signers.user.value, signerCounters)
 
   private def createEventLog(byzcoin: ByzCoinRPC, genesisDarc: Darc, user: Signer, signerCounters: SignerCounters) =
     IO {
@@ -123,27 +120,20 @@ object IOAuditLog {
       new EventLogInstance(byzcoin, genesisDarc.getId, List(user).asJava, signerCounters.getCounters)
     }
 
-  private def createGenesisDarc(admin: Signer, user: Signer, roster: Roster): IO[Darc] = IO {
-    val darc = ByzCoinRPC.makeGenesisDarc(admin, roster)
-    darc.addIdentity(s"spawn:$ContractId", user.getIdentity, Rules.OR)
-    darc.addIdentity(s"invoke:$ContractId.$LogCmd", user.getIdentity, Rules.OR)
+  private def createGenesisDarc(signers: AuditLogSigners, roster: Roster): IO[Darc] = IO {
+    val darc = ByzCoinRPC.makeGenesisDarc(signers.admin.value, roster)
+    darc.addIdentity(s"spawn:$ContractId", signers.user.value.getIdentity, Rules.OR)
+    darc.addIdentity(s"invoke:$ContractId.$LogCmd", signers.user.value.getIdentity, Rules.OR)
     darc
   }
 
-  private def readServerIdentities(serversFilename: ServersFilename): IO[List[ServerIdentity]] =
-    Option(Source.fromResource(serversFilename.value).reader())
-      .map { fileInputStream =>
-        IO {
-          new Toml()
-            .read(fileInputStream)
-            .getTables("servers")
-            .asScala
-            .toList
-            .map(_.to(classOf[ServerToml]))
-            .map(new ServerIdentity(_))
-        }
-      }
-      .getOrElse {
-        IO.raiseError(new FileNotFoundException(s"'$serversFilename' Audit Log configuration file cannot be found"))
-      }
+  private def readServerIdentities(serversFilename: ServersFilename): IO[List[ServerIdentity]] = IO {
+    new Toml()
+      .read(fromResource(serversFilename.value).reader())
+      .getTables("servers")
+      .asScala
+      .toList
+      .map(_.to(classOf[ServerToml]))
+      .map(new ServerIdentity(_))
+  }
 }
