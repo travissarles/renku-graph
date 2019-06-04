@@ -18,6 +18,8 @@
 
 package ch.datascience.webhookservice.audit
 
+import java.nio.file.Path
+
 import cats.MonadError
 import cats.data.OptionT
 import cats.implicits._
@@ -34,7 +36,7 @@ import pureconfig.error.CannotConvert
 import scala.language.higherKinds
 import scala.util.Try
 
-case class AuditLogConfig(topic: Topic, serversFilename: ServersFilename, signers: AuditLogSigners)
+case class AuditLogConfig(topic: Topic, serversConfigFile: ServersConfigFile, signers: AuditLogSigners)
 
 case class AuditLogSigners(admin: AdminSigner, user: UserSigner)
 
@@ -43,8 +45,22 @@ object AuditLogConfig {
   import ch.datascience.config.ConfigLoader._
   import eu.timepit.refined.pureconfig._
 
-  type Topic           = String Refined MatchesRegex[W.`"""^(?!\\s*$).+"""`.T]
-  type ServersFilename = String Refined MatchesRegex[W.`"""^(?!\\s*$).+"""`.T]
+  type Topic = String Refined MatchesRegex[W.`"""^(?!\\s*$).+"""`.T]
+  class ServersConfigFile private (val value: Path) extends AnyVal with TinyType[Path]
+  object ServersConfigFile extends TinyTypeFactory[Path, ServersConfigFile](new ServersConfigFile(_)) {
+
+    import java.nio.file.Paths
+
+    implicit val configFileReader: ConfigReader[ServersConfigFile] = {
+      ConfigReader.fromString[ServersConfigFile] { path =>
+        Try(Paths.get(path)).toEither
+          .flatMap(path => from(path))
+          .leftMap { exception =>
+            CannotConvert(path, typeName, exception.toString)
+          }
+      }
+    }
+  }
   class AdminSigner private (val value: Signer) extends AnyVal with TinyType[Signer]
   object AdminSigner
       extends TinyTypeFactory[Signer, AdminSigner](new AdminSigner(_))
@@ -82,7 +98,7 @@ object AuditLogConfig {
   )(implicit ME: MonadError[Interpretation, Throwable]) =
     for {
       topic           <- find[Interpretation, Topic]("audit-log.topic", config)
-      serversFilename <- find[Interpretation, ServersFilename]("audit-log.servers-filename", config)
+      serversFilename <- find[Interpretation, ServersConfigFile]("audit-log.servers-config-file", config)
       signers         <- readSigners[Interpretation](config)
     } yield Option(AuditLogConfig(topic, serversFilename, signers))
 

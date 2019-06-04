@@ -24,7 +24,7 @@ import cats.data.OptionT
 import cats.effect.IO
 import ch.datascience.graph.model.events.SerializedCommitEvent
 import ch.datascience.logging.ApplicationLogger
-import ch.datascience.webhookservice.audit.AuditLogConfig.ServersFilename
+import ch.datascience.webhookservice.audit.AuditLogConfig.ServersConfigFile
 import ch.epfl.dedis.byzcoin.SignerCounters
 import ch.epfl.dedis.eventlog.EventLogInstance
 import ch.epfl.dedis.lib.darc.Signer
@@ -85,6 +85,7 @@ class IOAuditLog private (config:         AuditLogConfig,
 }
 
 object IOAuditLog {
+  import java.nio.file.Files.{newInputStream => fromInputStream}
   import java.time.Duration
   import java.time.temporal.ChronoUnit.MILLIS
 
@@ -93,8 +94,6 @@ object IOAuditLog {
   import ch.epfl.dedis.eventlog.EventLogInstance._
   import ch.epfl.dedis.lib.darc._
   import ch.epfl.dedis.lib.network.{Roster, ServerIdentity}
-
-  import scala.io.Source.fromResource
 
   def apply(maybeConfig: OptionT[IO, AuditLogConfig] = AuditLogConfig.get(),
             logger:      Logger[IO]                  = ApplicationLogger): IO[AuditLog[IO]] =
@@ -107,7 +106,7 @@ object IOAuditLog {
 
   private def instantiateAuditLog(config: AuditLogConfig) =
     for {
-      roster         <- readServerIdentities(config.serversFilename).map(_.take(4)).map(_.asJava).map(new Roster(_))
+      roster         <- readServerIdentities(config.serversConfigFile).map(_.take(4)).map(_.asJava).map(new Roster(_))
       genesisDarc    <- createGenesisDarc(config.signers, roster)
       byzcoin        <- IO(new ByzCoinRPC(roster, genesisDarc, Duration.of(1000, MILLIS)))
       signerCounters <- IO(byzcoin.getSignerCounters(List(config.signers.user.value.getIdentity.toString).asJava))
@@ -127,9 +126,9 @@ object IOAuditLog {
     darc
   }
 
-  private def readServerIdentities(serversFilename: ServersFilename): IO[List[ServerIdentity]] = IO {
+  private def readServerIdentities(serversFilename: ServersConfigFile): IO[List[ServerIdentity]] = IO {
     new Toml()
-      .read(fromResource(serversFilename.value).reader())
+      .read(fromInputStream(serversFilename.value))
       .getTables("servers")
       .asScala
       .toList

@@ -38,16 +38,16 @@ class AuditLogConfigSpec extends WordSpec {
 
     "return an instance of the config if 'audit-log.enabled' is true " +
       "and there are all required entries" in {
-      val topic           = nonEmptyStrings().generateOne
-      val serversFilename = nonEmptyStrings().generateOne
-      val secrets         = auditLogSecrets.generateOne
+      val topic             = nonEmptyStrings().generateOne
+      val serversConfigFile = relativePaths().generateOne
+      val secrets           = auditLogSecrets.generateOne
 
       val config = ConfigFactory.parseMap(
         Map(
           "audit-log" -> Map(
-            "enabled"          -> "true",
-            "topic"            -> topic,
-            "servers-filename" -> serversFilename,
+            "enabled"             -> "true",
+            "topic"               -> topic,
+            "servers-config-file" -> serversConfigFile,
             "secrets" -> Map(
               "admin" -> secrets.admin.toConfigValue,
               "user"  -> secrets.user.toConfigValue
@@ -58,10 +58,10 @@ class AuditLogConfigSpec extends WordSpec {
 
       val Success(Some(auditLogConfig)) = AuditLogConfig.get[Try](config).value
 
-      auditLogConfig.topic.value                     shouldBe topic
-      auditLogConfig.serversFilename.value           shouldBe serversFilename
-      auditLogConfig.signers.admin.value.serialize() shouldBe secrets.admin.value.serialize()
-      auditLogConfig.signers.user.value.serialize()  shouldBe secrets.user.value.serialize()
+      auditLogConfig.topic.value                      shouldBe topic
+      auditLogConfig.serversConfigFile.value.toString shouldBe serversConfigFile
+      auditLogConfig.signers.admin.value.serialize()  shouldBe secrets.admin.value.serialize()
+      auditLogConfig.signers.user.value.serialize()   shouldBe secrets.user.value.serialize()
     }
 
     "return None if 'audit-log.enabled' is false" in {
@@ -86,8 +86,8 @@ class AuditLogConfigSpec extends WordSpec {
       val config = ConfigFactory.parseMap(
         Map(
           "audit-log" -> Map(
-            "enabled"          -> "true",
-            "servers-filename" -> nonEmptyStrings().generateOne,
+            "enabled"             -> "true",
+            "servers-config-file" -> relativePaths().generateOne,
             "secrets" -> Map(
               "admin" -> adminSecrets.generateOne.toConfigValue,
               "user"  -> userSecrets.generateOne.toConfigValue
@@ -99,7 +99,7 @@ class AuditLogConfigSpec extends WordSpec {
       AuditLogConfig.get[Try](config).value shouldBe a[Failure[_]]
     }
 
-    "fail if 'audit-log.enabled' is true but no 'servers-filename'" in {
+    "fail if 'audit-log.enabled' is true but no 'servers-config-file'" in {
       val config = ConfigFactory.parseMap(
         Map(
           "audit-log" -> Map(
@@ -120,9 +120,9 @@ class AuditLogConfigSpec extends WordSpec {
       val config = ConfigFactory.parseMap(
         Map(
           "audit-log" -> Map(
-            "enabled"          -> "true",
-            "topic"            -> nonEmptyStrings().generateOne,
-            "servers-filename" -> nonEmptyStrings().generateOne,
+            "enabled"             -> "true",
+            "topic"               -> nonEmptyStrings().generateOne,
+            "servers-config-file" -> relativePaths().generateOne,
             "secrets" -> Map(
               "user" -> userSecrets.generateOne.toConfigValue
             ).asJava
@@ -137,9 +137,9 @@ class AuditLogConfigSpec extends WordSpec {
       val config = ConfigFactory.parseMap(
         Map(
           "audit-log" -> Map(
-            "enabled"          -> "true",
-            "topic"            -> nonEmptyStrings().generateOne,
-            "servers-filename" -> nonEmptyStrings().generateOne,
+            "enabled"             -> "true",
+            "topic"               -> nonEmptyStrings().generateOne,
+            "servers-config-file" -> relativePaths().generateOne,
             "secrets" -> Map(
               "admin" -> adminSecrets.generateOne.toConfigValue,
             ).asJava
