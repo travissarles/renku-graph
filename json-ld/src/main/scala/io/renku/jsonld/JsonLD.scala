@@ -27,6 +27,7 @@ import io.circe.{Encoder, Json}
 abstract class JsonLD extends Product with Serializable {
   def toJson:   Json
   def entityId: Option[EntityId]
+  def flatten:  JsonLD
   def cursor: Cursor = Cursor.from(this)
 }
 
@@ -93,6 +94,25 @@ object JsonLD {
     }
 
     override lazy val entityId: Option[EntityId] = Some(id)
+    override lazy val flatten: JsonLD =
+      if (!hasNestedEntities) this
+      else
+        properties.foldLeft(List.empty[(Property, JsonLD)]) {
+          case (flattened, (prop, entity: JsonLDEntity)) => flattened :+ (prop -> JsonLD.fromEntityId(entity.id))
+        }
+
+    private lazy val hasNestedEntities: Boolean = properties.exists {
+      case (_, _: JsonLDEntity) => true
+      case (_, _) => false
+    }
+
+    private def flattenProperties(pulledEntities: List[JsonLDEntity]): List[JsonLDEntity] =
+      properties.foldLeft(pulledEntities -> List.empty[(Property, JsonLD)]) {
+        case ((pulled, flattened), (prop, entity: JsonLDEntity)) =>
+          (pulled :+ entity) -> (flattened :+ (prop -> JsonLD.fromEntityId(entity.id)))
+        case ((pulled, flattened), prop) =>
+          pulled -> (flattened :+ prop)
+      }
   }
 
   private[jsonld] final case class JsonLDValue[V](
@@ -106,6 +126,7 @@ object JsonLD {
     }
 
     override lazy val entityId: Option[EntityId] = None
+    override lazy val flatten:  JsonLD           = this
   }
 
   private[jsonld] object JsonLDValue {
@@ -116,6 +137,7 @@ object JsonLD {
   private[jsonld] final case object JsonLDNull extends JsonLD {
     override lazy val toJson:   Json             = Json.Null
     override lazy val entityId: Option[EntityId] = None
+    override lazy val flatten:  JsonLD           = this
   }
 
   private[jsonld] final case object JsonLDOptionValue {
@@ -129,10 +151,12 @@ object JsonLD {
   private[jsonld] final case class JsonLDArray(jsons: Seq[JsonLD]) extends JsonLD {
     override lazy val toJson:   Json             = Json.arr(jsons.map(_.toJson): _*)
     override lazy val entityId: Option[EntityId] = None
+    override lazy val flatten:  JsonLD           = this
   }
 
   private[jsonld] final case class JsonLDEntityId[V <: EntityId](id: V)(implicit encoder: Encoder[V]) extends JsonLD {
     override lazy val toJson:   Json             = Json.obj("@id" -> id.asJson)
     override lazy val entityId: Option[EntityId] = None
+    override lazy val flatten:  JsonLD           = this
   }
 }

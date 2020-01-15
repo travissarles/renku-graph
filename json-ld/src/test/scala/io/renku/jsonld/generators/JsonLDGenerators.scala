@@ -43,7 +43,7 @@ object JsonLDGenerators {
   private implicit val longJsonLDs:      Gen[JsonLD] = Arbitrary.arbLong.arbitrary map JsonLD.fromLong
   private implicit val instantJsonLDs:   Gen[JsonLD] = timestamps map JsonLD.fromInstant
   private implicit val localDateJsonLDs: Gen[JsonLD] = localDates map JsonLD.fromLocalDate
-  implicit val jsonLDs: Gen[JsonLD] = Gen.oneOf(
+  implicit val jsonLDValues: Gen[JsonLD] = Gen.oneOf(
     stringJsonLDs,
     intJsonLDs,
     longJsonLDs,
@@ -58,6 +58,6 @@ object JsonLDGenerators {
 
   implicit val entityProperties: Gen[(Property, JsonLD)] = for {
     property <- properties
-    value    <- jsonLDs
+    value    <- jsonLDValues
   } yield property -> value
 }

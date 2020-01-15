@@ -29,6 +29,7 @@ import io.circe.syntax._
 import io.renku.jsonld.generators.Generators.Implicits._
 import io.renku.jsonld.generators.Generators._
 import io.renku.jsonld.generators.JsonLDGenerators._
+import io.renku.jsonld.syntax._
 import org.scalacheck.Gen
 import org.scalatest.Matchers._
 import org.scalatest.WordSpec
@@ -284,7 +285,7 @@ class JsonLDSpec extends WordSpec with ScalaCheckPropertyChecks {
       }
     }
 
-    "be able to add mutliple reverse properties" in {
+    "be able to add multiple reverse properties" in {
       forAll {
         (parentId:       EntityId,
          parentTypes:    EntityTypes,
@@ -324,6 +325,51 @@ class JsonLDSpec extends WordSpec with ScalaCheckPropertyChecks {
     "have some entityId" in {
       forAll { (id: EntityId, types: EntityTypes, property: (Property, JsonLD)) =>
         JsonLD.entity(id, types, property).entityId shouldBe Some(id)
+      }
+    }
+  }
+
+  "flatten" should {
+
+    "do nothing for JsonLDValue" in {
+      forAll(jsonLDValues) { json =>
+        json.flatten shouldBe json
+      }
+    }
+
+    "do nothing for JsonLDEntity" in {
+      forAll { entityId: EntityId =>
+        val json = JsonLD.fromEntityId(entityId)
+        json.flatten shouldBe json
+      }
+    }
+
+    "do nothing for JsonLDNull" in {
+      JsonLD.Null.flatten shouldBe JsonLD.Null
+    }
+
+    "do nothing for JsonLDEntity without nested entities" in {
+      forAll {
+        (parentId:       EntityId,
+         parentTypes:    EntityTypes,
+         parentProperty: Property,
+         childId:        EntityId,
+         childTypes:     EntityTypes,
+         childProperty:  (Property, JsonLD)) =>
+          val child  = JsonLD.entity(childId, childTypes, childProperty)
+          val parent = JsonLD.entity(parentId, parentTypes, parentProperty -> child)
+
+          parent.flatten shouldBe JsonLD.arr(
+            JsonLD.entity(parentId, parentTypes, parentProperty -> JsonLD.fromEntityId(child.id)),
+            JsonLD.entity(childId, childTypes, childProperty)
+          )
+      }
+    }
+
+    "pull off all the nested JsonLDEntity entities into an array and replace them with relevant ids" in {
+      forAll { (id: EntityId, types: EntityTypes, property1: (Property, JsonLD), other: List[(Property, JsonLD)]) =>
+        val json = JsonLD.entity(id, types, property1, other: _*)
+        json.flatten shouldBe json
       }
     }
   }
