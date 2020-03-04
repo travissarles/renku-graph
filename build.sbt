@@ -17,6 +17,7 @@ lazy val root = Project(
   skip in publish := true,
   publishTo := Some(Resolver.file("Unused transient repository", file("target/unusedrepo")))
 ).aggregate(
+  jenaSecurity,
   jsonLd,
   graphCommons,
   dbEventLog,
@@ -24,6 +25,15 @@ lazy val root = Project(
   webhookService,
   triplesGenerator,
   knowledgeGraph
+)
+
+lazy val jenaSecurity = Project(
+  id = "jena-security",
+  base = file("jena-security")
+).settings(
+  commonSettings
+).enablePlugins(
+  AutomateHeaderPlugin
 )
 
 lazy val jsonLd = Project(
