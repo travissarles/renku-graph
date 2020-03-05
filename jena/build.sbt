@@ -17,7 +17,7 @@
  */
 
 organization := "io.renku"
-name := "jena-security"
+name := "jena"
 
 retrieveManaged := true
 

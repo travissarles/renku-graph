@@ -17,7 +17,7 @@ lazy val root = Project(
   skip in publish := true,
   publishTo := Some(Resolver.file("Unused transient repository", file("target/unusedrepo")))
 ).aggregate(
-  jenaSecurity,
+  jena,
   jsonLd,
   graphCommons,
   dbEventLog,
@@ -27,9 +27,9 @@ lazy val root = Project(
   knowledgeGraph
 )
 
-lazy val jenaSecurity = Project(
-  id = "jena-security",
-  base = file("jena-security")
+lazy val jena = Project(
+  id = "jena",
+  base = file("jena")
 ).settings(
   commonSettings
 ).enablePlugins(
