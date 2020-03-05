@@ -2,18 +2,29 @@ package io.renku.jena.evaluator
 
 import java.util
 
+import io.renku.jena.realm.PrivilegedUsers
 import org.apache.jena.graph
-import org.apache.jena.graph.Node
+import org.apache.jena.graph.{Node, Triple}
 import org.apache.jena.permissions.SecurityEvaluator
+import org.apache.jena.rdf.model._
+import org.apache.jena.shared.AuthenticationRequiredException
+import org.apache.jena.vocabulary.RDF
 import org.apache.shiro.SecurityUtils
+import org.apache.shiro.subject.Subject
+
+import scala.collection.JavaConverters._
 
 class RenkuEvaluator(smth: Any) extends SecurityEvaluator {
 
-  println(s"inited with $smth")
+  private val isPartOf = ResourceFactory.createProperty("http://schema.org/", "isPartOf")
 
   override def evaluate(principal: Any, action: SecurityEvaluator.Action, graphIRI: Node): Boolean = {
-    println("evaluate 1")
-    true
+    val r = principal.isAuthenticated && (
+      (action == SecurityEvaluator.Action.Read) || principal.isPrivileged
+    )
+
+    println(s"evaluate 1 $action -> $r")
+    r
   }
 
   override def evaluate(principal: Any,
@@ -21,12 +32,12 @@ class RenkuEvaluator(smth: Any) extends SecurityEvaluator {
                         graphIRI:  Node,
                         triple:    graph.Triple): Boolean = {
     println("evaluate 2")
-    true
+    evaluate(principal, action, graphIRI) && (principal.isPrivileged || evaluate(principal, triple))
   }
 
   override def evaluate(principal: Any, actions: util.Set[SecurityEvaluator.Action], graphIRI: Node): Boolean = {
     println("evaluate 3")
-    true
+    actions.asScala forall (evaluate(principal, _, graphIRI))
   }
 
   override def evaluate(principal: Any,
@@ -34,20 +45,58 @@ class RenkuEvaluator(smth: Any) extends SecurityEvaluator {
                         graphIRI:  Node,
                         triple:    graph.Triple): Boolean = {
     println("evaluate 4")
-    true
+    (actions.asScala forall (evaluate(principal, _, graphIRI))) &&
+    (principal.isPrivileged || evaluate(principal, triple))
+  }
+
+  private def evaluate(principal: Any, triple: Triple): Boolean = {
+    println(s"triple: s -> ${triple.getSubject}; p -> ${triple.getPredicate}; o -> ${triple.getObject}")
+    if (!principal.isAuthenticated) false
+    else if (principal.isPrivileged) true
+    else {
+      val subject   = triple.getSubject
+      val predicate = triple.getPredicate
+      val obj       = triple.getObject
+
+      if ((subject == Node.ANY) || (predicate == Node.ANY) || (obj == Node.ANY)) false
+      else if ((predicate.toString() == RDF.`type`.toString) && (obj.toString == "http://schema.org/Project"))
+        principal.isAuthorised(subject.toString())
+      else if (predicate.toString() == isPartOf.toString) principal.isAuthorised(obj.toString())
+      else true
+    }
+  }
+
+  private implicit class PrincipalOps(principal: Any) {
+
+    private lazy val subject: Subject =
+      Option(principal)
+        .flatMap {
+          case p: Subject => Some(p)
+          case _ => None
+        }
+        .getOrElse(throw new AuthenticationRequiredException("No principal given"))
+
+    lazy val isAuthenticated = subject.isAuthenticated
+    lazy val isPrivileged: Boolean = PrivilegedUsers.contains(subject.getPrincipal.toString)
+
+    def isAuthorised(projectId: String): Boolean = {
+      val r = subject hasRole projectId
+      println(s"isAuthorised: $projectId -> $r")
+      r
+    }
   }
 
   override def evaluateAny(principal: Any, actions: util.Set[SecurityEvaluator.Action], graphIRI: Node): Boolean = {
     println("evaluate any 1")
-    true
+    evaluate(principal, actions, graphIRI)
   }
 
   override def evaluateAny(principal: Any,
                            actions:   util.Set[SecurityEvaluator.Action],
                            graphIRI:  Node,
                            triple:    graph.Triple): Boolean = {
-    println("evaluate any 2")
-    true
+    println(s"evaluate any 2: s -> ${triple.getSubject}; p -> ${triple.getPredicate}; o -> ${triple.getObject}")
+    evaluate(principal, actions, graphIRI, triple)
   }
 
   override def evaluateUpdate(principal: Any, graphIRI: Node, from: graph.Triple, to: graph.Triple): Boolean = {

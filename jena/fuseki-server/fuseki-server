@@ -82,5 +82,5 @@ JVM_ARGS=${JVM_ARGS:--Xmx1200M}
 ## "exec" is optional - it simply frees up an OS process.
 ## In this way, you can add custom java to the classpath:
 
-APPJAR='jena-permissions-3.10.0.jar:jena-permissions-3.10.0-example.jar:commons-collections4-4.4.jar:jena-security.jar'
+APPJAR='jena-permissions-3.10.0.jar:jena-permissions-3.10.0-example.jar:commons-collections4-4.4.jar:renku-security.jar'
 java $JVM_ARGS -cp "$JAR:$APPJAR" org.apache.jena.fuseki.cmd.FusekiCmd "$@"

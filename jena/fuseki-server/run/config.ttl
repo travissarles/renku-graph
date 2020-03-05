@@ -35,8 +35,7 @@ perm:Model       rdfs:subClassOf  ja:NamedModel .
 ##
 ## Define the base model that contains the unsecured data.
 ##
-my:baseModel rdf:type ja:MemoryModel;
-    ja:content [ja:externalContent <file:./example.ttl>] 
+my:baseModel rdf:type ja:MemoryModel
     .   
 
 ##
@@ -85,7 +84,7 @@ my:fuskei rdf:type fuseki:Server ;
 ##
 my:service1 rdf:type fuseki:Service ;
     rdfs:label                        "My Secured Data Service" ;
-    fuseki:name                       "myAppFuseki" ;       # http://host:port/myAppFuseki
+    fuseki:name                       "renku" ;    # http://host:port/myAppFuseki
     fuseki:serviceQuery               "query" ;    # SPARQL query service
     fuseki:serviceQuery               "sparql" ;   # SPARQL query service
     fuseki:serviceUpdate              "update" ;   # SPARQL query service
