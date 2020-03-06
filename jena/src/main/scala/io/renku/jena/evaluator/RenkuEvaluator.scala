@@ -16,6 +16,7 @@ import scala.collection.JavaConverters._
 
 class RenkuEvaluator(smth: Any) extends SecurityEvaluator {
 
+  private val projectIdPrefix: String = "https://dev.renku.ch/projects/"
   private val isPartOf = ResourceFactory.createProperty("http://schema.org/", "isPartOf")
 
   override def evaluate(principal: Any, action: SecurityEvaluator.Action, graphIRI: Node): Boolean = {
@@ -59,9 +60,8 @@ class RenkuEvaluator(smth: Any) extends SecurityEvaluator {
       val obj       = triple.getObject
 
       if ((subject == Node.ANY) || (predicate == Node.ANY) || (obj == Node.ANY)) false
-      else if ((predicate.toString() == RDF.`type`.toString) && (obj.toString == "http://schema.org/Project"))
-        principal.isAuthorised(subject.toString())
-      else if (predicate.toString() == isPartOf.toString) principal.isAuthorised(obj.toString())
+      else if (predicate.toString() == isPartOf.toString) principal isAuthorised obj
+      else if (subject.isProjectId) principal isAuthorised subject
       else true
     }
   }
@@ -79,11 +79,16 @@ class RenkuEvaluator(smth: Any) extends SecurityEvaluator {
     lazy val isAuthenticated = subject.isAuthenticated
     lazy val isPrivileged: Boolean = PrivilegedUsers.contains(subject.getPrincipal.toString)
 
-    def isAuthorised(projectId: String): Boolean = {
-      val r = subject hasRole projectId
-      println(s"isAuthorised: $projectId -> $r")
+    def isAuthorised(node:  Node): Boolean = isAuthorised(node.toString)
+    def isAuthorised(value: String): Boolean = {
+      val r = subject hasRole value
+      println(s"isAuthorised: $value -> $r")
       r
     }
+  }
+
+  private implicit class NodeOps(node: Node) {
+    lazy val isProjectId: Boolean = node.toString startsWith projectIdPrefix
   }
 
   override def evaluateAny(principal: Any, actions: util.Set[SecurityEvaluator.Action], graphIRI: Node): Boolean = {
